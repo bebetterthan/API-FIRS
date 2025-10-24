@@ -565,35 +565,6 @@ else
 fi
 
 echo ""
-
-################################################################################
-# Usage & Maintenance
-################################################################################
-if [ "$PROCESSED" -gt 0 ]; then
-    echo -e "${YELLOW}Usage Examples:${NC}"
-    echo ""
-    echo "  Pipeline mode (process files):"
-    echo "    ./test_process_json_files.sh"
-    echo ""
-    echo "  Verify mode only:"
-    echo "    PROCESS_MODE=verify ./test_process_json_files.sh"
-    echo ""
-    echo "  Custom configuration:"
-    echo "    BASE_URL=https://your-api.com X_API_KEY=key X_API_SECRET=secret ./test_process_json_files.sh"
-    echo ""
-    echo "  Custom paths:"
-    echo "    JSON_DIR=/custom/path OUTPUT_BASE=/custom/output ./test_process_json_files.sh"
-    echo ""
-    echo -e "${YELLOW}Maintenance Commands:${NC}"
-    echo ""
-    echo "  Delete all processed files:"
-    echo "    rm -f ${JSON_DIR}/*.json ${OUTPUT_BASE}/QR/QR_txt/*.txt ${OUTPUT_BASE}/QR/QR_img/*.png"
-    echo ""
-    echo "  Archive old files (30+ days):"
-    echo "    find ${JSON_DIR} -name '*.json' -mtime +30 -exec mv {} /archive/ \;"
-    echo ""
-fi
-
 echo -e "${CYAN}================================================================${NC}"
 if [ "$PROCESS_MODE" = "pipeline" ] && [ $SUCCESS -eq $PROCESSED ] && [ $ERRORS -eq 0 ]; then
     echo -e "${GREEN}Pipeline Processing Complete! All files processed successfully.${NC}"
