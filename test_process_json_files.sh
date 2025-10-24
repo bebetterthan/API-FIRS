@@ -81,8 +81,8 @@ fi
 
 echo -e "${GREEN}  ✓ Directory exists${NC}"
 
-# Count JSON files
-JSON_COUNT=$(find "$JSON_DIR" -maxdepth 1 -name "*.json" -type f 2>/dev/null | wc -l)
+# Count JSON files (trim whitespace)
+JSON_COUNT=$(find "$JSON_DIR" -maxdepth 1 -name "*.json" -type f 2>/dev/null | wc -l | tr -d ' ')
 
 if [ "$JSON_COUNT" -eq 0 ]; then
     echo -e "${YELLOW}  ⚠ No JSON files found${NC}"
@@ -163,18 +163,22 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     echo -e "${GREEN}✓ Valid JSON syntax${NC}"
     
-    # Extract key information
+    # Extract key information (optimized - single jq call)
     if [ $HAS_JQ -eq 1 ]; then
-        # Use jq for parsing
-        IRN=$(jq -r '.irn // "N/A"' "$JSON_FILE" 2>/dev/null)
-        BUSINESS_ID=$(jq -r '.business_id // "N/A"' "$JSON_FILE" 2>/dev/null)
-        ISSUE_DATE=$(jq -r '.issue_date // "N/A"' "$JSON_FILE" 2>/dev/null)
-        PAYMENT_STATUS=$(jq -r '.payment_status // "N/A"' "$JSON_FILE" 2>/dev/null)
-        SUPPLIER=$(jq -r '.accounting_supplier_party.party_name // "N/A"' "$JSON_FILE" 2>/dev/null)
-        CUSTOMER=$(jq -r '.accounting_customer_party.party_name // "N/A"' "$JSON_FILE" 2>/dev/null)
-        TOTAL=$(jq -r '.legal_monetary_total.payable_amount // "N/A"' "$JSON_FILE" 2>/dev/null)
-        CURRENCY=$(jq -r '.document_currency_code // "N/A"' "$JSON_FILE" 2>/dev/null)
-        LINE_COUNT=$(jq -r '.invoice_lines | length' "$JSON_FILE" 2>/dev/null)
+        # Use jq for parsing - single call for efficiency
+        read -r IRN BUSINESS_ID ISSUE_DATE PAYMENT_STATUS SUPPLIER CUSTOMER TOTAL CURRENCY LINE_COUNT < <(
+            jq -r '[
+                .irn // "N/A",
+                .business_id // "N/A",
+                .issue_date // "N/A",
+                .payment_status // "N/A",
+                .accounting_supplier_party.party_name // "N/A",
+                .accounting_customer_party.party_name // "N/A",
+                .legal_monetary_total.payable_amount // "N/A",
+                .document_currency_code // "N/A",
+                (.invoice_lines | length | tostring)
+            ] | @tsv' "$JSON_FILE" 2>/dev/null
+        )
     else
         # Use grep for basic parsing
         IRN=$(grep -o '"irn"[[:space:]]*:[[:space:]]*"[^"]*"' "$JSON_FILE" | head -1 | cut -d'"' -f4)
@@ -271,12 +275,14 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     START_TIME=$(date +%s%3N 2>/dev/null || date +%s 2>/dev/null || echo "0")
     
-    # Make API call with proper headers
+    # Make API call with proper headers (optimized with compression)
     API_RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X POST \
         -H "Content-Type: application/json" \
+        -H "Accept-Encoding: gzip, deflate" \
         -H "x-api-key: ${X_API_KEY}" \
         -H "x-api-secret: ${X_API_SECRET}" \
+        --compressed \
         --data-binary @"$JSON_FILE" \
         "${BASE_URL}/api/v1/invoice/sign" 2>&1)
     
@@ -298,13 +304,16 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         
         # Try to parse error message
         if [ $HAS_JQ -eq 1 ]; then
-            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error // .message // "Unknown error"' 2>/dev/null)
-            if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ]; then
+            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // .error // .message // "Unknown error"' 2>/dev/null)
+            if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ] && [ "$ERROR_MSG" != "Unknown error" ]; then
                 echo -e "  ${RED}Error: ${ERROR_MSG}${NC}"
+            else
+                # Show first 200 chars if no clear error message
+                echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
             fi
         else
             # Show first 200 chars of response
-            echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)${NC}"
+            echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
         fi
         
         ERRORS=$((ERRORS + 1))
@@ -322,11 +331,15 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     FILES_CREATED=0
     
-    # Extract file paths from response
+    # Extract file paths from response (optimized - single jq call)
     if [ $HAS_JQ -eq 1 ]; then
-        JSON_PATH=$(echo "$RESPONSE_BODY" | jq -r '.data.files.json // empty' 2>/dev/null)
-        BASE64_PATH=$(echo "$RESPONSE_BODY" | jq -r '.data.files.encrypted // empty' 2>/dev/null)
-        QR_PATH=$(echo "$RESPONSE_BODY" | jq -r '.data.files.qr_code // empty' 2>/dev/null)
+        read -r JSON_PATH BASE64_PATH QR_PATH < <(
+            echo "$RESPONSE_BODY" | jq -r '[
+                .data.files.json // "",
+                .data.files.encrypted // "",
+                .data.files.qr_code // ""
+            ] | @tsv' 2>/dev/null
+        )
     else
         JSON_PATH=$(echo "$RESPONSE_BODY" | grep -o '"json":"[^"]*"' | head -1 | cut -d'"' -f4)
         BASE64_PATH=$(echo "$RESPONSE_BODY" | grep -o '"encrypted":"[^"]*"' | head -1 | cut -d'"' -f4)
