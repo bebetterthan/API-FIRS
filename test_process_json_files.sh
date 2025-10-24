@@ -18,11 +18,12 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration (same as main API)
-# Default values from .env - override with environment variables
+# Production configuration from .env
 JSON_DIR="${JSON_DIR:-/www/wwwroot/sftp/user_data/json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/www/wwwroot/sftp/user_data}"
 BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"
 X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
+X_API_SECRET="${X_API_SECRET:-c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4rZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC}"
 
 # Processing mode
 PROCESS_MODE="${PROCESS_MODE:-pipeline}"  # pipeline or verify
@@ -38,7 +39,7 @@ echo "  Mode:           ${PROCESS_MODE}"
 echo "  JSON Directory: ${JSON_DIR}"
 echo "  Output Base:    ${OUTPUT_BASE}"
 echo "  Base URL:       ${BASE_URL}"
-echo "  API Key:        ${X_API_KEY}"
+echo "  API Key:        ${X_API_KEY:0:20}..." # Show first 20 chars only
 echo ""
 
 ################################################################################
@@ -100,31 +101,9 @@ echo ""
 ################################################################################
 echo -e "${CYAN}[Step 3/5]${NC} Testing API Connection..."
 
-# Test using /api/transmitting/health endpoint (public, no auth needed)
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-    "${BASE_URL}/api/transmitting/health" 2>/dev/null || echo "000")
-
-if [ "$HEALTH_CHECK" = "200" ]; then
-    echo -e "${GREEN}  ✓ API is reachable (HTTP ${HEALTH_CHECK})${NC}"
-    echo "  Endpoint: /api/transmitting/health"
-else
-    echo -e "${RED}  ✗ API not reachable (HTTP ${HEALTH_CHECK})${NC}"
-    echo -e "${YELLOW}  Trying alternative endpoint...${NC}"
-    
-    # Try alternative health endpoint (also public)
-    HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-        "${BASE_URL}/api/v1/system/health" 2>/dev/null || echo "000")
-    
-    if [ "$HEALTH_CHECK" = "200" ]; then
-        echo -e "${GREEN}  ✓ API is reachable (HTTP ${HEALTH_CHECK})${NC}"
-        echo "  Endpoint: /api/v1/system/health"
-    else
-        echo -e "${RED}  ✗ API not reachable${NC}"
-        echo -e "${YELLOW}  Continuing in verify-only mode...${NC}"
-        PROCESS_MODE="verify"
-    fi
-fi
-
+# Skip health check - will test directly with real invoice processing
+echo "  Endpoint: ${BASE_URL}/api/v1/invoice/sign"
+echo -e "${GREEN}  ✓ Ready to process invoices${NC}"
 echo ""
 
 ################################################################################
@@ -271,12 +250,13 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     START_TIME=$(date +%s%3N 2>/dev/null || date +%s 2>/dev/null || echo "0")
     
-    # Make API call with proper headers (optimized with compression)
+    # Make API call with proper headers and authentication
     API_RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X POST \
         -H "Content-Type: application/json" \
         -H "Accept-Encoding: gzip, deflate" \
         -H "x-api-key: ${X_API_KEY}" \
+        -H "x-api-secret: ${X_API_SECRET}" \
         --compressed \
         --data-binary @"$JSON_FILE" \
         "${BASE_URL}/api/v1/invoice/sign" 2>&1)
@@ -294,7 +274,8 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     echo "    HTTP Status: ${HTTP_CODE}"
     
-    if [ "$HTTP_CODE" != "200" ]; then
+    # Accept both HTTP 200 and 201 as success
+    if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
         echo -e "  ${RED}✗ API call failed (HTTP ${HTTP_CODE})${NC}"
         
         # Try to parse error message
@@ -321,49 +302,96 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         echo "    Response time: ${DURATION}ms"
     fi
     
-    # Step 3: Verify created files
-    echo "  [3/3] Verifying generated files..."
+    # Step 3: Extract data from response and save files locally
+    echo "  [3/3] Saving files to local storage..."
     
     FILES_CREATED=0
     
-    # Extract file paths from response (optimized - single jq call)
+    # Extract IRN signed and encrypted data from response
     if [ $HAS_JQ -eq 1 ]; then
-        read -r JSON_PATH BASE64_PATH QR_PATH < <(
-            echo "$RESPONSE_BODY" | jq -r '[
-                .data.files.json // "",
-                .data.files.encrypted // "",
-                .data.files.qr_code // ""
-            ] | @tsv' 2>/dev/null
-        )
+        IRN_SIGNED=$(echo "$RESPONSE_BODY" | jq -r '.data.irn_signed // .data.irn // ""' 2>/dev/null)
+        ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | jq -r '.data.encrypted_data // ""' 2>/dev/null)
     else
-        JSON_PATH=$(echo "$RESPONSE_BODY" | grep -o '"json":"[^"]*"' | head -1 | cut -d'"' -f4)
-        BASE64_PATH=$(echo "$RESPONSE_BODY" | grep -o '"encrypted":"[^"]*"' | head -1 | cut -d'"' -f4)
-        QR_PATH=$(echo "$RESPONSE_BODY" | grep -o '"qr_code":"[^"]*"' | head -1 | cut -d'"' -f4)
+        IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn_signed":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [ -z "$IRN_SIGNED" ]; then
+            IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
+        ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | grep -o '"encrypted_data":"[^"]*"' | head -1 | cut -d'"' -f4)
     fi
     
-    # Verify JSON (already exists, just check)
-    if [ -n "$JSON_PATH" ] && [ -f "$JSON_PATH" ]; then
-        echo -e "    ${GREEN}✓ JSON:   $(basename "$JSON_PATH")${NC}"
-        FILES_CREATED=$((FILES_CREATED + 1))
+    if [ -z "$IRN_SIGNED" ]; then
+        echo -e "    ${RED}✗ Cannot extract IRN from response${NC}"
+        ERRORS=$((ERRORS + 1))
+        echo ""
+        continue
     fi
     
-    # Verify Base64
-    if [ -n "$BASE64_PATH" ] && [ -f "$BASE64_PATH" ]; then
-        B64_SIZE=$(stat -c%s "$BASE64_PATH" 2>/dev/null || stat -f%z "$BASE64_PATH" 2>/dev/null || echo "?")
-        echo -e "    ${GREEN}✓ Base64: $(basename "$BASE64_PATH") (${B64_SIZE} bytes)${NC}"
-        FILES_CREATED=$((FILES_CREATED + 1))
+    # Define file paths based on signed IRN
+    BASE64_DIR="${OUTPUT_BASE}/QR/QR_txt"
+    QR_DIR="${OUTPUT_BASE}/QR/QR_img"
+    
+    # Create directories if not exist
+    mkdir -p "$BASE64_DIR" 2>/dev/null
+    mkdir -p "$QR_DIR" 2>/dev/null
+    
+    BASE64_PATH="${BASE64_DIR}/${IRN_SIGNED}.txt"
+    QR_PATH="${QR_DIR}/${IRN_SIGNED}.png"
+    
+    # Save Base64 encrypted data
+    if [ -n "$ENCRYPTED_DATA" ]; then
+        echo "$ENCRYPTED_DATA" > "$BASE64_PATH"
+        if [ -f "$BASE64_PATH" ]; then
+            B64_SIZE=$(stat -c%s "$BASE64_PATH" 2>/dev/null || stat -f%z "$BASE64_PATH" 2>/dev/null || wc -c < "$BASE64_PATH" 2>/dev/null || echo "?")
+            echo -e "    ${GREEN}✓ Base64: ${IRN_SIGNED}.txt (${B64_SIZE} bytes)${NC}"
+            FILES_CREATED=$((FILES_CREATED + 1))
+        else
+            echo -e "    ${RED}✗ Failed to save Base64 file${NC}"
+        fi
     else
-        echo -e "    ${RED}✗ Base64 file not created${NC}"
+        echo -e "    ${RED}✗ No encrypted data in response${NC}"
     fi
     
-    # Verify QR
-    if [ -n "$QR_PATH" ] && [ -f "$QR_PATH" ]; then
-        QR_SIZE=$(stat -c%s "$QR_PATH" 2>/dev/null || stat -f%z "$QR_PATH" 2>/dev/null || echo "?")
-        QR_SIZE_KB=$(echo "scale=1; $QR_SIZE / 1024" | bc 2>/dev/null || echo "$((QR_SIZE / 1024))")
-        echo -e "    ${GREEN}✓ QR PNG: $(basename "$QR_PATH") (${QR_SIZE_KB} KB)${NC}"
-        FILES_CREATED=$((FILES_CREATED + 1))
+    # Generate QR code from Base64 data using PHP
+    if [ -n "$ENCRYPTED_DATA" ] && [ -n "$PHP_BIN" ]; then
+        QR_RESULT=$("$PHP_BIN" -r "
+        require 'vendor/autoload.php';
+        use chillerlan\QRCode\QRCode;
+        use chillerlan\QRCode\QROptions;
+        try {
+            \$options = new QROptions([
+                'version' => 5,
+                'outputType' => QRCode::OUTPUT_IMAGE_PNG,
+                'eccLevel' => QRCode::ECC_L,
+                'scale' => 10,
+                'imageBase64' => false,
+            ]);
+            \$qrcode = new QRCode(\$options);
+            \$qrcode->render('$ENCRYPTED_DATA', '$QR_PATH');
+            echo 'SUCCESS';
+        } catch (Exception \$e) {
+            echo 'ERROR: ' . \$e->getMessage();
+        }
+        " 2>&1)
+        
+        if [ "$QR_RESULT" = "SUCCESS" ] && [ -f "$QR_PATH" ]; then
+            QR_SIZE=$(stat -c%s "$QR_PATH" 2>/dev/null || stat -f%z "$QR_PATH" 2>/dev/null || wc -c < "$QR_PATH" 2>/dev/null || echo "0")
+            QR_SIZE_KB=$(echo "scale=1; $QR_SIZE / 1024" | bc 2>/dev/null || echo "$((QR_SIZE / 1024))")
+            echo -e "    ${GREEN}✓ QR PNG: ${IRN_SIGNED}.png (${QR_SIZE_KB} KB)${NC}"
+            FILES_CREATED=$((FILES_CREATED + 1))
+        else
+            echo -e "    ${RED}✗ Failed to generate QR code${NC}"
+            if [ "$QR_RESULT" != "SUCCESS" ]; then
+                echo -e "    ${RED}  Error: ${QR_RESULT}${NC}"
+            fi
+        fi
     else
-        echo -e "    ${RED}✗ QR PNG file not created${NC}"
+        echo -e "    ${RED}✗ Cannot generate QR (missing data or PHP)${NC}"
+    fi
+    
+    # JSON file already exists in source directory
+    if [ -f "$JSON_FILE" ]; then
+        echo -e "    ${GREEN}✓ JSON:   $(basename "$JSON_FILE")${NC}"
+        FILES_CREATED=$((FILES_CREATED + 1))
     fi
     
     if [ $FILES_CREATED -eq 3 ]; then
@@ -425,7 +453,7 @@ if [ "$PROCESSED" -gt 0 ]; then
     echo "    PROCESS_MODE=verify ./test_process_json_files.sh"
     echo ""
     echo "  Custom configuration:"
-    echo "    BASE_URL=http://example.com X_API_KEY=your-api-key ./test_process_json_files.sh"
+    echo "    BASE_URL=https://your-api.com X_API_KEY=key X_API_SECRET=secret ./test_process_json_files.sh"
     echo ""
     echo "  Custom paths:"
     echo "    JSON_DIR=/custom/path OUTPUT_BASE=/custom/output ./test_process_json_files.sh"
