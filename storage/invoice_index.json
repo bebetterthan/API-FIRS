@@ -1,0 +1,66 @@
+{
+    "invoices": [
+        {
+            "irn": "TEST251024141724-37647342",
+            "irn_signed": "TEST251024141724-37647342.1761290245",
+            "business_id": "d91c22f8-0912-4f42-8349-33f28e4a6c4e",
+            "issue_date": "2025-10-23",
+            "due_date": "2025-11-23",
+            "payment_status": "PAID",
+            "signed": true,
+            "signed_at": "2025-10-24T08:17:29Z",
+            "files": {
+                "encrypted": "/www/wwwroot/sftp/user_data/QR_txt/2025-10/TEST251024141724-37647342.txt",
+                "qr_code": "/www/wwwroot/sftp/user_data/QR_img/2025-10/TEST251024141724-37647342.png"
+            },
+            "summary": {
+                "supplier": "N/A",
+                "customer": "N/A",
+                "total_amount": 59850,
+                "currency": "NGN"
+            }
+        },
+        {
+            "irn": "TEST251024142129-50010329",
+            "irn_signed": "TEST251024142129-50010329.1761290489",
+            "business_id": "d91c22f8-0912-4f42-8349-33f28e4a6c4e",
+            "issue_date": "2025-10-23",
+            "due_date": "2025-11-23",
+            "payment_status": "PAID",
+            "signed": true,
+            "signed_at": "2025-10-24T08:21:32Z",
+            "files": {
+                "encrypted": "/www/wwwroot/sftp/user_data/QR/QR_txt/2025-10/TEST251024142129-50010329.txt",
+                "qr_code": "/www/wwwroot/sftp/user_data/QR/QR_img/2025-10/TEST251024142129-50010329.png"
+            },
+            "summary": {
+                "supplier": "N/A",
+                "customer": "N/A",
+                "total_amount": 59850,
+                "currency": "NGN"
+            }
+        },
+        {
+            "irn": "TEST251024142633-78094236",
+            "irn_signed": "TEST251024142633-78094236.1761290794",
+            "business_id": "d91c22f8-0912-4f42-8349-33f28e4a6c4e",
+            "issue_date": "2025-10-23",
+            "due_date": "2025-11-23",
+            "payment_status": "PAID",
+            "signed": true,
+            "signed_at": "2025-10-24T08:26:36Z",
+            "files": {
+                "encrypted": "/www/wwwroot/sftp/user_data/QR/QR_txt/TEST251024142633-78094236.txt",
+                "qr_code": "/www/wwwroot/sftp/user_data/QR/QR_img/TEST251024142633-78094236.png"
+            },
+            "summary": {
+                "supplier": "N/A",
+                "customer": "N/A",
+                "total_amount": 59850,
+                "currency": "NGN"
+            }
+        }
+    ],
+    "last_updated": "2025-10-24T08:26:36Z",
+    "total_count": 3
+}

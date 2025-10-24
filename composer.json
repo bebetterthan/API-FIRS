@@ -1,0 +1,41 @@
+{
+    "name": "firs/einvoice-api",
+    "description": "FIRS E-Invoice API Processor - PHP-based API for processing Nigerian tax invoices with encryption and QR code generation",
+    "type": "project",
+    "license": "proprietary",
+    "version": "1.0.0",
+    "authors": [
+        {
+            "name": "bebetterthanokay",
+            "email": "developer@example.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-openssl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-curl": "*",
+        "league/flysystem": "^3.0",
+        "league/flysystem-sftp-v3": "^3.0",
+        "chillerlan/php-qrcode": "^4.3",
+        "phpseclib/phpseclib": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "FIRS\\": "classes/"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php -r \"if (!file_exists('.env')) { copy('.env.example', '.env'); echo 'Created .env file\\n'; }\""
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

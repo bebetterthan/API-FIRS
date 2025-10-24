@@ -1,0 +1,88 @@
+{
+  "business_id": "d91c22f8-0912-4f42-8349-33f28e4a6c4e",
+  "irn": "PFNL0001-9D3009-20251023",
+  "payment_status": "PAID",
+  "customization_id": null,
+  "issue_date": "2025-10-23",
+  "issue_time": "14:30:00",
+  "due_date": "2025-11-23",
+  "invoice_type_code": "380",
+  "document_currency_code": "NGN",
+  "tax_currency_code": "NGN",
+  "accounting_supplier_party": {
+    "id": "971cdc76-8f01-4d5c-b48f-297126b1e69b",
+    "postal_address_id": "cd9e1ba4-ae36-4ead-b44d-951c7042a4f0",
+    "party_name": "PF-DEV",
+    "tin": "16069538-0001",
+    "email": "sys@primerafood-nigeria.com",
+    "telephone": "+2342342532",
+    "business_description": null,
+    "postal_address": {
+      "id": "b05123d9-1f32-4bd4-9e18-0c69f56dcd75",
+      "street_name": "Plot 4-6, Block I, Industrial 1, OPIC Estate, Agbara, Ogun State, NIGERIA",
+      "city_name": "Agbara",
+      "postal_zone": "110123",
+      "country": "NG"
+    }
+  },
+  "accounting_customer_party": {
+    "id": "971cdc76-8f01-4d5c-b48f-297126b1e69b",
+    "postal_address_id": "cd9e1ba4-ae36-4ead-b44d-951c7042a4f0",
+    "party_name": "EURO MEGA ATLANTIC NIGERIA LTD. North",
+    "tin": "01278222-0001",
+    "email": "customer@euromega.com",
+    "telephone": "+2341234567",
+    "business_description": null,
+    "postal_address": {
+      "id": "cd9e1ba4-ae36-4ead-b44d-951c7042a4f0",
+      "street_name": "Suite 21B, West Pavilion, Ent 1, 1st floor Tafawa Balewa Square Complex, Lagos, Nigeria",
+      "city_name": "Lagos",
+      "postal_zone": "100001",
+      "country": "NG"
+    }
+  },
+  "tax_total": [
+    {
+      "tax_amount": 4175.58,
+      "tax_subtotal": [
+        {
+          "taxable_amount": 55674.42,
+          "tax_amount": 4175.58,
+          "tax_category": {
+            "id": "LOCAL_SALES_TAX",
+            "percent": 7.5
+          },
+          "TaxCategoryPercent": 7.5
+        }
+      ]
+    }
+  ],
+  "legal_monetary_total": {
+    "line_extension_amount": 55674.42,
+    "tax_exclusive_amount": 55674.42,
+    "tax_inclusive_amount": 59850,
+    "payable_amount": 59850
+  },
+  "invoice_line": [
+    {
+      "invoiced_quantity": 3,
+      "line_extension_amount": 55674.42,
+      "item": {
+        "name": "TOP CAFE 3 IN 1 CREAMY WHITE COFFEE MIX - (120 PCS X 30G)",
+        "description": "TOP CAFE 3 IN 1 CREAMY WHITE COFFEE MIX - (120 PCS X 30G)",
+        "sellers_item_identification": "18000001"
+      },
+      "price": {
+        "price_amount": 18558.14,
+        "base_quantity": 3,
+        "price_unit": "NGN per 1"
+      },
+      "hsn_code": "2101.12",
+      "product_category": "Food and Beverages",
+      "discount_rate": 0,
+      "discount_amount": 0,
+      "fee_rate": 0,
+      "fee_amount": 0
+    }
+  ]
+}

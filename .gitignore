@@ -1,0 +1,50 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Composer
+/vendor/
+composer.lock
+
+# Storage files
+/storage/encrypted/*
+!/storage/encrypted/.gitkeep
+/storage/sftp_cache/*
+!/storage/sftp_cache/.gitkeep
+/storage/crypto_keys.txt
+
+# Output files
+/output/qrcodes/*
+!/output/qrcodes/.gitkeep
+
+# Logs
+/logs/*.log
+/logs/*
+!/logs/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.lock
+/tmp/*
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# System files
+*.swp
+*.swo
+*~
+.directory
+
+# Backup files
+*.bak
+*.backup
+*.old

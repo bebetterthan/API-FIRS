@@ -1,0 +1,152 @@
+[
+  {
+    "code": "2101.11",
+    "description": "Coffee extracts, essences and concentrates",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "2101.12",
+    "description": "Preparations with a basis of coffee extracts, essences or concentrates",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "2101.20",
+    "description": "Tea or mate extracts, essences and concentrates",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "8471.30",
+    "description": "Portable digital automatic data processing machines",
+    "category": "Electronics"
+  },
+  {
+    "code": "8471.41",
+    "description": "Data processing machines, comprising CPU, input and output units",
+    "category": "Electronics"
+  },
+  {
+    "code": "8471.50",
+    "description": "Processing units for automatic data processing machines",
+    "category": "Electronics"
+  },
+  {
+    "code": "8471.60",
+    "description": "Input or output units for automatic data processing machines",
+    "category": "Electronics"
+  },
+  {
+    "code": "8471.70",
+    "description": "Storage units for automatic data processing machines",
+    "category": "Electronics"
+  },
+  {
+    "code": "8528.52",
+    "description": "Monitors capable of directly connecting to and designed for use with automatic data processing machines",
+    "category": "Electronics"
+  },
+  {
+    "code": "4901.10",
+    "description": "Books, brochures and similar printed matter, in single sheets",
+    "category": "Printed Materials"
+  },
+  {
+    "code": "4901.91",
+    "description": "Dictionaries and encyclopedias, and serial installments",
+    "category": "Printed Materials"
+  },
+  {
+    "code": "4901.99",
+    "description": "Other books, brochures, leaflets and similar printed matter",
+    "category": "Printed Materials"
+  },
+  {
+    "code": "3004.90",
+    "description": "Other medicaments put up in measured doses or for retail sale",
+    "category": "Pharmaceuticals"
+  },
+  {
+    "code": "3003.90",
+    "description": "Other medicaments not put up in measured doses or for retail sale",
+    "category": "Pharmaceuticals"
+  },
+  {
+    "code": "8703.21",
+    "description": "Motor cars with spark-ignition engine of cylinder capacity not exceeding 1000 cc",
+    "category": "Vehicles"
+  },
+  {
+    "code": "8703.22",
+    "description": "Motor cars with spark-ignition engine of cylinder capacity 1000-1500 cc",
+    "category": "Vehicles"
+  },
+  {
+    "code": "8703.23",
+    "description": "Motor cars with spark-ignition engine of cylinder capacity 1500-3000 cc",
+    "category": "Vehicles"
+  },
+  {
+    "code": "8703.24",
+    "description": "Motor cars with spark-ignition engine of cylinder capacity exceeding 3000 cc",
+    "category": "Vehicles"
+  },
+  {
+    "code": "2710.12",
+    "description": "Light petroleum oils and preparations",
+    "category": "Petroleum Products"
+  },
+  {
+    "code": "2710.19",
+    "description": "Other petroleum oils and oils obtained from bituminous minerals",
+    "category": "Petroleum Products"
+  },
+  {
+    "code": "6204.62",
+    "description": "Women's or girls' trousers and shorts, of cotton",
+    "category": "Textiles and Garments"
+  },
+  {
+    "code": "6109.10",
+    "description": "T-shirts, singlets and other vests, of cotton",
+    "category": "Textiles and Garments"
+  },
+  {
+    "code": "6403.99",
+    "description": "Other footwear with outer soles of rubber, plastics or leather",
+    "category": "Footwear"
+  },
+  {
+    "code": "0901.21",
+    "description": "Coffee, roasted, not decaffeinated",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "1701.99",
+    "description": "Other cane or beet sugar and chemically pure sucrose",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "1006.30",
+    "description": "Semi-milled or wholly milled rice",
+    "category": "Food and Beverages"
+  },
+  {
+    "code": "4011.10",
+    "description": "New pneumatic tyres, of rubber, of a kind used on motor cars",
+    "category": "Automotive Parts"
+  },
+  {
+    "code": "8517.62",
+    "description": "Machines for the reception, conversion and transmission of voice, images or data",
+    "category": "Telecommunications"
+  },
+  {
+    "code": "9403.60",
+    "description": "Other wooden furniture",
+    "category": "Furniture"
+  },
+  {
+    "code": "2523.29",
+    "description": "Other portland cement",
+    "category": "Building Materials"
+  }
+]
