@@ -21,8 +21,7 @@ NC='\033[0m'
 JSON_DIR="${JSON_DIR:-/www/wwwroot/sftp/user_data/json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/www/wwwroot/sftp/user_data}"
 BASE_URL="${BASE_URL:-http://localhost}"
-X_API_KEY="${X_API_KEY:-test-key}"
-X_API_SECRET="${X_API_SECRET:-test-secret}"
+X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
 
 # Processing mode
 PROCESS_MODE="${PROCESS_MODE:-pipeline}"  # pipeline or verify
@@ -100,10 +99,8 @@ echo ""
 ################################################################################
 echo -e "${CYAN}[Step 3/5]${NC} Testing API Connection..."
 
-# Test using /api/transmitting/health endpoint
+# Test using /api/transmitting/health endpoint (public, no auth needed)
 HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "x-api-key: ${X_API_KEY}" \
-    -H "x-api-secret: ${X_API_SECRET}" \
     "${BASE_URL}/api/transmitting/health" 2>/dev/null || echo "000")
 
 if [ "$HEALTH_CHECK" = "200" ]; then
@@ -113,10 +110,8 @@ else
     echo -e "${RED}  ✗ API not reachable (HTTP ${HEALTH_CHECK})${NC}"
     echo -e "${YELLOW}  Trying alternative endpoint...${NC}"
     
-    # Try alternative health endpoint
+    # Try alternative health endpoint (also public)
     HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
-        -H "x-api-key: ${X_API_KEY}" \
-        -H "x-api-secret: ${X_API_SECRET}" \
         "${BASE_URL}/api/v1/system/health" 2>/dev/null || echo "000")
     
     if [ "$HEALTH_CHECK" = "200" ]; then
@@ -281,7 +276,6 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         -H "Content-Type: application/json" \
         -H "Accept-Encoding: gzip, deflate" \
         -H "x-api-key: ${X_API_KEY}" \
-        -H "x-api-secret: ${X_API_SECRET}" \
         --compressed \
         --data-binary @"$JSON_FILE" \
         "${BASE_URL}/api/v1/invoice/sign" 2>&1)
@@ -430,7 +424,7 @@ if [ "$PROCESSED" -gt 0 ]; then
     echo "    PROCESS_MODE=verify ./test_process_json_files.sh"
     echo ""
     echo "  Custom configuration:"
-    echo "    BASE_URL=http://example.com X_API_KEY=key X_API_SECRET=secret ./test_process_json_files.sh"
+    echo "    BASE_URL=http://example.com X_API_KEY=your-api-key ./test_process_json_files.sh"
     echo ""
     echo "  Custom paths:"
     echo "    JSON_DIR=/custom/path OUTPUT_BASE=/custom/output ./test_process_json_files.sh"
