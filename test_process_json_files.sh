@@ -6,7 +6,8 @@
 # Same flow as /api/v1/invoice/sign but for batch processing
 ################################################################################
 
-set -e
+# Exit on error (but continue loop)
+# set -e  # Removed to allow processing multiple files even if one fails
 
 # Colors
 RED='\033[0;31m'
@@ -16,12 +17,12 @@ CYAN='\033[0;36m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
+# Configuration (same as main API)
 JSON_DIR="${JSON_DIR:-/www/wwwroot/sftp/user_data/json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/www/wwwroot/sftp/user_data}"
-API_URL="${API_URL:-http://localhost}"
-API_KEY="${API_KEY:-test-key}"
-API_SECRET="${API_SECRET:-test-secret}"
+BASE_URL="${BASE_URL:-http://localhost}"
+X_API_KEY="${X_API_KEY:-test-key}"
+X_API_SECRET="${X_API_SECRET:-test-secret}"
 
 # Processing mode
 PROCESS_MODE="${PROCESS_MODE:-pipeline}"  # pipeline or verify
@@ -36,7 +37,8 @@ echo -e "${YELLOW}Configuration:${NC}"
 echo "  Mode:           ${PROCESS_MODE}"
 echo "  JSON Directory: ${JSON_DIR}"
 echo "  Output Base:    ${OUTPUT_BASE}"
-echo "  API URL:        ${API_URL}"
+echo "  Base URL:       ${BASE_URL}"
+echo "  API Key:        ${X_API_KEY}"
 echo ""
 
 ################################################################################
@@ -98,14 +100,33 @@ echo ""
 ################################################################################
 echo -e "${CYAN}[Step 3/5]${NC} Testing API Connection..."
 
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}/health" 2>/dev/null || echo "000")
+# Test using /api/transmitting/health endpoint
+HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "x-api-key: ${X_API_KEY}" \
+    -H "x-api-secret: ${X_API_SECRET}" \
+    "${BASE_URL}/api/transmitting/health" 2>/dev/null || echo "000")
 
 if [ "$HEALTH_CHECK" = "200" ]; then
-    echo -e "${GREEN}  ✓ API is reachable${NC}"
+    echo -e "${GREEN}  ✓ API is reachable (HTTP ${HEALTH_CHECK})${NC}"
+    echo "  Endpoint: /api/transmitting/health"
 else
     echo -e "${RED}  ✗ API not reachable (HTTP ${HEALTH_CHECK})${NC}"
-    echo -e "${YELLOW}  Continuing in verify-only mode...${NC}"
-    PROCESS_MODE="verify"
+    echo -e "${YELLOW}  Trying alternative endpoint...${NC}"
+    
+    # Try alternative health endpoint
+    HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "x-api-key: ${X_API_KEY}" \
+        -H "x-api-secret: ${X_API_SECRET}" \
+        "${BASE_URL}/api/v1/system/health" 2>/dev/null || echo "000")
+    
+    if [ "$HEALTH_CHECK" = "200" ]; then
+        echo -e "${GREEN}  ✓ API is reachable (HTTP ${HEALTH_CHECK})${NC}"
+        echo "  Endpoint: /api/v1/system/health"
+    else
+        echo -e "${RED}  ✗ API not reachable${NC}"
+        echo -e "${YELLOW}  Continuing in verify-only mode...${NC}"
+        PROCESS_MODE="verify"
+    fi
 fi
 
 echo ""
@@ -232,20 +253,32 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     echo -e "${CYAN}[PIPELINE] Starting processing...${NC}"
     
     # Step 1: Read JSON content
-    echo "  [1/3] Reading JSON file..."
+    echo "  [1/3] Reading JSON content..."
+    
+    # Validate JSON can be read
+    if ! cat "$JSON_FILE" > /dev/null 2>&1; then
+        echo -e "  ${RED}✗ Cannot read JSON file${NC}"
+        ERRORS=$((ERRORS + 1))
+        echo ""
+        continue
+    fi
+    
+    echo -e "  ${GREEN}✓ JSON file readable (${FILESIZE} bytes)${NC}"
     
     # Step 2: Call API to encrypt and generate QR
-    echo "  [2/3] Calling API (encrypt + QR generation)..."
+    echo "  [2/3] Calling API POST /api/v1/invoice/sign..."
+    echo "    IRN: ${IRN}"
     
     START_TIME=$(date +%s%3N 2>/dev/null || date +%s 2>/dev/null || echo "0")
     
+    # Make API call with proper headers
     API_RESPONSE=$(curl -s -w "\n%{http_code}" \
         -X POST \
         -H "Content-Type: application/json" \
-        -H "x-api-key: ${API_KEY}" \
-        -H "x-api-secret: ${API_SECRET}" \
-        -d @"$JSON_FILE" \
-        "${API_URL}/api/v1/invoice/sign" 2>&1)
+        -H "x-api-key: ${X_API_KEY}" \
+        -H "x-api-secret: ${X_API_SECRET}" \
+        --data-binary @"$JSON_FILE" \
+        "${BASE_URL}/api/v1/invoice/sign" 2>&1)
     
     END_TIME=$(date +%s%3N 2>/dev/null || date +%s 2>/dev/null || echo "0")
     
@@ -258,18 +291,28 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         DURATION="N/A"
     fi
     
+    echo "    HTTP Status: ${HTTP_CODE}"
+    
     if [ "$HTTP_CODE" != "200" ]; then
         echo -e "  ${RED}✗ API call failed (HTTP ${HTTP_CODE})${NC}"
+        
+        # Try to parse error message
         if [ $HAS_JQ -eq 1 ]; then
             ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error // .message // "Unknown error"' 2>/dev/null)
-            echo -e "  ${RED}Error: ${ERROR_MSG}${NC}"
+            if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ]; then
+                echo -e "  ${RED}Error: ${ERROR_MSG}${NC}"
+            fi
+        else
+            # Show first 200 chars of response
+            echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)${NC}"
         fi
+        
         ERRORS=$((ERRORS + 1))
         echo ""
         continue
     fi
     
-    echo -e "  ${GREEN}✓ API call successful${NC}"
+    echo -e "  ${GREEN}✓ API call successful (HTTP ${HTTP_CODE})${NC}"
     if [ "$DURATION" != "N/A" ]; then
         echo "    Response time: ${DURATION}ms"
     fi
@@ -373,8 +416,11 @@ if [ "$PROCESSED" -gt 0 ]; then
     echo "  Verify mode only:"
     echo "    PROCESS_MODE=verify ./test_process_json_files.sh"
     echo ""
+    echo "  Custom configuration:"
+    echo "    BASE_URL=http://example.com X_API_KEY=key X_API_SECRET=secret ./test_process_json_files.sh"
+    echo ""
     echo "  Custom paths:"
-    echo "    JSON_DIR=/custom/path API_URL=http://example.com ./test_process_json_files.sh"
+    echo "    JSON_DIR=/custom/path OUTPUT_BASE=/custom/output ./test_process_json_files.sh"
     echo ""
     echo -e "${YELLOW}Maintenance Commands:${NC}"
     echo ""
