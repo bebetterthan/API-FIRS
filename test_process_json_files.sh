@@ -18,12 +18,15 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration (same as main API)
-# Production configuration from .env
+# POST to FIRS production API for validation, then process locally with crypto_keys
+# Local processing: encrypt with crypto_keys.txt, generate QR, save files
 JSON_DIR="${JSON_DIR:-/www/wwwroot/sftp/user_data/json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/www/wwwroot/sftp/user_data}"
-BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"
+BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"  # FIRS production API
 X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
 X_API_SECRET="${X_API_SECRET:-c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4rZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC}"
+
+# Workflow: JSON → FIRS validation → Local encrypt (crypto_keys) → Local QR → Save files
 
 # Processing mode
 PROCESS_MODE="${PROCESS_MODE:-pipeline}"  # pipeline or verify
@@ -234,8 +237,10 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     # Step 1: Read JSON content
     echo "  [1/3] Reading JSON content..."
     
-    # Validate JSON can be read
-    if ! cat "$JSON_FILE" > /dev/null 2>&1; then
+    # Read and store JSON content for later use
+    JSON_CONTENT=$(cat "$JSON_FILE" 2>/dev/null)
+    
+    if [ -z "$JSON_CONTENT" ]; then
         echo -e "  ${RED}✗ Cannot read JSON file${NC}"
         ERRORS=$((ERRORS + 1))
         echo ""
@@ -311,12 +316,79 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     if [ $HAS_JQ -eq 1 ]; then
         IRN_SIGNED=$(echo "$RESPONSE_BODY" | jq -r '.data.irn_signed // .data.irn // ""' 2>/dev/null)
         ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | jq -r '.data.encrypted_data // ""' 2>/dev/null)
+        DATA_OK=$(echo "$RESPONSE_BODY" | jq -r '.data.ok // false' 2>/dev/null)
     else
         IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn_signed":"[^"]*"' | head -1 | cut -d'"' -f4)
         if [ -z "$IRN_SIGNED" ]; then
             IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn":"[^"]*"' | head -1 | cut -d'"' -f4)
         fi
         ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | grep -o '"encrypted_data":"[^"]*"' | head -1 | cut -d'"' -f4)
+        DATA_OK=$(echo "$RESPONSE_BODY" | grep -o '"ok":[^,}]*' | head -1 | cut -d':' -f2 | tr -d ' ')
+    fi
+    
+    # Check if FIRS API validation successful (returns {ok: true})
+    # Now we process locally: encrypt with crypto_keys and generate QR
+    if [ "$DATA_OK" = "true" ] && [ -z "$ENCRYPTED_DATA" ]; then
+        echo -e "    ${GREEN}✓ FIRS validation successful${NC}"
+        echo "    Processing locally with crypto_keys..."
+        
+        # Extract IRN from original JSON
+        if [ $HAS_JQ -eq 1 ]; then
+            IRN=$(echo "$JSON_CONTENT" | jq -r '.irn // ""' 2>/dev/null)
+        else
+            IRN=$(echo "$JSON_CONTENT" | grep -o '"irn":"[^"]*"' | head -1 | cut -d'"' -f4)
+        fi
+        
+        if [ -z "$IRN" ]; then
+            echo -e "    ${RED}✗ Cannot extract IRN from JSON${NC}"
+            ERRORS=$((ERRORS + 1))
+            echo ""
+            continue
+        fi
+        
+        # Create signed IRN with timestamp
+        TIMESTAMP=$(date +%s)
+        IRN_SIGNED="${IRN}.${TIMESTAMP}"
+        
+        # Encrypt using PHP with crypto_keys
+        CRYPTO_KEYS_FILE="./storage/crypto_keys.txt"
+        if [ ! -f "$CRYPTO_KEYS_FILE" ]; then
+            echo -e "    ${RED}✗ crypto_keys.txt not found${NC}"
+            ERRORS=$((ERRORS + 1))
+            echo ""
+            continue
+        fi
+        
+        # Encrypt IRN with certificate using PHP
+        ENCRYPTED_DATA=$("$PHP_BIN" -r "
+        \$keys = json_decode(file_get_contents('$CRYPTO_KEYS_FILE'), true);
+        \$publicKeyPem = base64_decode(\$keys['public_key']);
+        \$payload = json_encode([
+            'irn' => '$IRN_SIGNED',
+            'certificate' => \$keys['certificate']
+        ], JSON_UNESCAPED_SLASHES);
+        \$publicKey = openssl_pkey_get_public(\$publicKeyPem);
+        if (!\$publicKey) {
+            echo 'ERROR: Invalid public key';
+            exit(1);
+        }
+        \$encrypted = '';
+        \$result = openssl_public_encrypt(\$payload, \$encrypted, \$publicKey, OPENSSL_PKCS1_PADDING);
+        if (!\$result) {
+            echo 'ERROR: Encryption failed';
+            exit(1);
+        }
+        echo base64_encode(\$encrypted);
+        " 2>&1)
+        
+        if [[ "$ENCRYPTED_DATA" == ERROR:* ]]; then
+            echo -e "    ${RED}✗ Encryption failed: ${ENCRYPTED_DATA}${NC}"
+            ERRORS=$((ERRORS + 1))
+            echo ""
+            continue
+        fi
+        
+        echo -e "    ${GREEN}✓ Encrypted with crypto_keys${NC}"
     fi
     
     if [ -z "$IRN_SIGNED" ]; then
