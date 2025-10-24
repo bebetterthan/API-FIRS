@@ -18,9 +18,10 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration (same as main API)
+# Default values from .env - override with environment variables
 JSON_DIR="${JSON_DIR:-/www/wwwroot/sftp/user_data/json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/www/wwwroot/sftp/user_data}"
-BASE_URL="${BASE_URL:-http://localhost}"
+BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"
 X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
 
 # Processing mode
