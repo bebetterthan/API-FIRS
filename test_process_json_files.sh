@@ -54,6 +54,7 @@ if ! command -v php &> /dev/null; then
     echo -e "${RED}✗ PHP not found${NC}"
     exit 1
 fi
+PHP_BIN="php"  # PHP binary path
 PHP_VER=$(php -v | head -n 1 | awk '{print $2}')
 echo -e "${GREEN}  ✓ PHP ${PHP_VER}${NC}"
 
@@ -281,66 +282,116 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
     
     # Accept both HTTP 200 and 201 as success
     if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
-        echo -e "  ${RED}✗ API call failed (HTTP ${HTTP_CODE})${NC}"
-        
-        # Try to parse error message
+        # Check if this is a duplicate error (IRN already validated before)
+        IS_DUPLICATE=false
         if [ $HAS_JQ -eq 1 ]; then
-            ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.message // .error // .message // "Unknown error"' 2>/dev/null)
-            if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ] && [ "$ERROR_MSG" != "Unknown error" ]; then
-                echo -e "  ${RED}Error: ${ERROR_MSG}${NC}"
-            else
-                # Show first 200 chars if no clear error message
-                echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
+            ERROR_DETAILS=$(echo "$RESPONSE_BODY" | jq -r '.error.details // ""' 2>/dev/null)
+            if [[ "$ERROR_DETAILS" == *"duplicate"* ]] || [[ "$ERROR_DETAILS" == *"already exists"* ]] || [[ "$ERROR_DETAILS" == *"unable to complete"* ]]; then
+                IS_DUPLICATE=true
             fi
         else
-            # Show first 200 chars of response
-            echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
+            if echo "$RESPONSE_BODY" | grep -qi "duplicate\|already exists\|unable to complete"; then
+                IS_DUPLICATE=true
+            fi
         fi
         
-        ERRORS=$((ERRORS + 1))
-        echo ""
-        continue
+        if [ "$IS_DUPLICATE" = true ]; then
+            echo -e "  ${YELLOW}⚠ Duplicate IRN (already validated by FIRS)${NC}"
+            
+            # Extract IRN to check for existing files
+            if [ $HAS_JQ -eq 1 ]; then
+                IRN_CHECK=$(echo "$JSON_CONTENT" | jq -r '.irn // ""' 2>/dev/null)
+            else
+                IRN_CHECK=$(echo "$JSON_CONTENT" | grep -o '"irn"\s*:\s*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+            fi
+            
+            if [ -z "$IRN_CHECK" ]; then
+                echo -e "  ${RED}✗ Cannot extract IRN from JSON${NC}"
+                ERRORS=$((ERRORS + 1))
+                echo ""
+                continue
+            fi
+            
+            # Check if Base64 and QR files already exist with this IRN pattern
+            BASE64_DIR="${OUTPUT_BASE}/QR/QR_txt"
+            QR_DIR="${OUTPUT_BASE}/QR/QR_img"
+            
+            # Find existing files with this IRN (may have different timestamps)
+            EXISTING_BASE64=$(find "$BASE64_DIR" -name "${IRN_CHECK}.*.txt" 2>/dev/null | head -1)
+            EXISTING_QR=$(find "$QR_DIR" -name "${IRN_CHECK}.*.png" 2>/dev/null | head -1)
+            
+            if [ -n "$EXISTING_BASE64" ] && [ -n "$EXISTING_QR" ]; then
+                # Both files exist, skip processing
+                echo -e "  ${GREEN}✓ Base64 file exists: $(basename "$EXISTING_BASE64")${NC}"
+                echo -e "  ${GREEN}✓ QR code exists: $(basename "$EXISTING_QR")${NC}"
+                echo -e "  ${CYAN}→ Skipping: All files already generated${NC}"
+                SKIPPED=$((SKIPPED + 1))
+                PROCESSED=$((PROCESSED + 1))
+                echo ""
+                continue
+            else
+                # Files missing, process locally
+                if [ -z "$EXISTING_BASE64" ]; then
+                    echo -e "  ${YELLOW}✗ Base64 file not found${NC}"
+                fi
+                if [ -z "$EXISTING_QR" ]; then
+                    echo -e "  ${YELLOW}✗ QR code not found${NC}"
+                fi
+                echo -e "  ${CYAN}→ Generating missing files...${NC}"
+                DATA_OK="true"
+            fi
+        else
+            echo -e "  ${RED}✗ API call failed (HTTP ${HTTP_CODE})${NC}"
+            
+            # Try to parse error message
+            if [ $HAS_JQ -eq 1 ]; then
+                ERROR_MSG=$(echo "$RESPONSE_BODY" | jq -r '.error.details // .error.message // .error // .message // "Unknown error"' 2>/dev/null)
+                if [ -n "$ERROR_MSG" ] && [ "$ERROR_MSG" != "null" ] && [ "$ERROR_MSG" != "Unknown error" ]; then
+                    echo -e "  ${RED}Error: ${ERROR_MSG}${NC}"
+                else
+                    # Show first 200 chars if no clear error message
+                    echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
+                fi
+            else
+                # Show first 200 chars of response
+                echo -e "  ${RED}Response: $(echo "$RESPONSE_BODY" | head -c 200)...${NC}"
+            fi
+            
+            ERRORS=$((ERRORS + 1))
+            echo ""
+            continue
+        fi
+    else
+        echo -e "  ${GREEN}✓ API call successful (HTTP ${HTTP_CODE})${NC}"
+        if [ "$DURATION" != "N/A" ]; then
+            echo "    Response time: ${DURATION}ms"
+        fi
+        DATA_OK="true"
     fi
     
-    echo -e "  ${GREEN}✓ API call successful (HTTP ${HTTP_CODE})${NC}"
-    if [ "$DURATION" != "N/A" ]; then
-        echo "    Response time: ${DURATION}ms"
-    fi
-    
-    # Step 3: Extract data from response and save files locally
-    echo "  [3/3] Saving files to local storage..."
+    # Step 3: Process locally if FIRS validation OK or duplicate
+    echo "  [3/3] Processing locally with crypto_keys..."
     
     FILES_CREATED=0
     
-    # Extract IRN signed and encrypted data from response
-    if [ $HAS_JQ -eq 1 ]; then
-        IRN_SIGNED=$(echo "$RESPONSE_BODY" | jq -r '.data.irn_signed // .data.irn // ""' 2>/dev/null)
-        ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | jq -r '.data.encrypted_data // ""' 2>/dev/null)
-        DATA_OK=$(echo "$RESPONSE_BODY" | jq -r '.data.ok // false' 2>/dev/null)
-    else
-        IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn_signed":"[^"]*"' | head -1 | cut -d'"' -f4)
-        if [ -z "$IRN_SIGNED" ]; then
-            IRN_SIGNED=$(echo "$RESPONSE_BODY" | grep -o '"irn":"[^"]*"' | head -1 | cut -d'"' -f4)
-        fi
-        ENCRYPTED_DATA=$(echo "$RESPONSE_BODY" | grep -o '"encrypted_data":"[^"]*"' | head -1 | cut -d'"' -f4)
-        DATA_OK=$(echo "$RESPONSE_BODY" | grep -o '"ok":[^,}]*' | head -1 | cut -d':' -f2 | tr -d ' ')
-    fi
+    # For duplicate or successful validation, we process locally
+    # No need to extract from response, we already have DATA_OK flag
     
-    # Check if FIRS API validation successful (returns {ok: true})
-    # Now we process locally: encrypt with crypto_keys and generate QR
-    if [ "$DATA_OK" = "true" ] && [ -z "$ENCRYPTED_DATA" ]; then
-        echo -e "    ${GREEN}✓ FIRS validation successful${NC}"
-        echo "    Processing locally with crypto_keys..."
+    # Process locally: encrypt with crypto_keys and generate QR
+    if [ "$DATA_OK" = "true" ]; then
+        echo -e "    ${GREEN}✓ FIRS validation confirmed${NC}"
+        echo "    Encrypting with crypto_keys..."
         
         # Extract IRN from original JSON
         if [ $HAS_JQ -eq 1 ]; then
             IRN=$(echo "$JSON_CONTENT" | jq -r '.irn // ""' 2>/dev/null)
         else
-            IRN=$(echo "$JSON_CONTENT" | grep -o '"irn":"[^"]*"' | head -1 | cut -d'"' -f4)
+            IRN=$(echo "$JSON_CONTENT" | grep -o '"irn"\s*:\s*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
         fi
         
         if [ -z "$IRN" ]; then
             echo -e "    ${RED}✗ Cannot extract IRN from JSON${NC}"
+            echo -e "    ${YELLOW}Debug: JSON_CONTENT length = ${#JSON_CONTENT}${NC}"
             ERRORS=$((ERRORS + 1))
             echo ""
             continue
@@ -350,7 +401,7 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         TIMESTAMP=$(date +%s)
         IRN_SIGNED="${IRN}.${TIMESTAMP}"
         
-        # Encrypt using PHP with crypto_keys
+        # Encrypt using PHP inline with crypto_keys
         CRYPTO_KEYS_FILE="./storage/crypto_keys.txt"
         if [ ! -f "$CRYPTO_KEYS_FILE" ]; then
             echo -e "    ${RED}✗ crypto_keys.txt not found${NC}"
@@ -360,35 +411,38 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         fi
         
         # Encrypt IRN with certificate using PHP
-        ENCRYPTED_DATA=$("$PHP_BIN" -r "
-        \$keys = json_decode(file_get_contents('$CRYPTO_KEYS_FILE'), true);
-        \$publicKeyPem = base64_decode(\$keys['public_key']);
-        \$payload = json_encode([
-            'irn' => '$IRN_SIGNED',
-            'certificate' => \$keys['certificate']
-        ], JSON_UNESCAPED_SLASHES);
-        \$publicKey = openssl_pkey_get_public(\$publicKeyPem);
-        if (!\$publicKey) {
-            echo 'ERROR: Invalid public key';
-            exit(1);
-        }
-        \$encrypted = '';
-        \$result = openssl_public_encrypt(\$payload, \$encrypted, \$publicKey, OPENSSL_PKCS1_PADDING);
-        if (!\$result) {
-            echo 'ERROR: Encryption failed';
-            exit(1);
-        }
-        echo base64_encode(\$encrypted);
-        " 2>&1)
+        ENCRYPTED_DATA=$(php -r "
+\$keysFile = './storage/crypto_keys.txt';
+\$keys = json_decode(file_get_contents(\$keysFile), true);
+if (!\$keys) {
+    fwrite(STDERR, 'ERROR: Failed to load crypto_keys.txt' . PHP_EOL);
+    exit(1);
+}
+\$publicKeyPem = base64_decode(\$keys['public_key']);
+\$publicKey = openssl_pkey_get_public(\$publicKeyPem);
+if (!\$publicKey) {
+    fwrite(STDERR, 'ERROR: Invalid public key' . PHP_EOL);
+    exit(1);
+}
+\$irnSigned = '$IRN_SIGNED';
+\$payload = json_encode(['irn' => \$irnSigned, 'certificate' => \$keys['certificate']], JSON_UNESCAPED_SLASHES);
+\$encrypted = '';
+\$result = openssl_public_encrypt(\$payload, \$encrypted, \$publicKey, OPENSSL_PKCS1_PADDING);
+if (!\$result) {
+    fwrite(STDERR, 'ERROR: Encryption failed' . PHP_EOL);
+    exit(1);
+}
+echo base64_encode(\$encrypted);
+" 2>&1)
         
-        if [[ "$ENCRYPTED_DATA" == ERROR:* ]]; then
+        if [[ "$ENCRYPTED_DATA" == ERROR:* ]] || [ -z "$ENCRYPTED_DATA" ]; then
             echo -e "    ${RED}✗ Encryption failed: ${ENCRYPTED_DATA}${NC}"
             ERRORS=$((ERRORS + 1))
             echo ""
             continue
         fi
         
-        echo -e "    ${GREEN}✓ Encrypted with crypto_keys${NC}"
+        echo -e "    ${GREEN}✓ Encrypted with crypto_keys (${#ENCRYPTED_DATA} bytes base64)${NC}"
     fi
     
     if [ -z "$IRN_SIGNED" ]; then
@@ -431,10 +485,10 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
         use chillerlan\QRCode\QROptions;
         try {
             \$options = new QROptions([
-                'version' => 5,
+                'version' => QRCode::VERSION_AUTO,
                 'outputType' => QRCode::OUTPUT_IMAGE_PNG,
                 'eccLevel' => QRCode::ECC_L,
-                'scale' => 10,
+                'scale' => 6,
                 'imageBase64' => false,
             ]);
             \$qrcode = new QRCode(\$options);
