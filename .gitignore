@@ -17,6 +17,14 @@ composer.lock
 # Output files
 /output/qrcodes/*
 !/output/qrcodes/.gitkeep
+/output/*
+!/output/.gitkeep
+
+# Private keys and credentials
+private*.ppk
+public*
+*.ppk
+*.pem
 
 # Logs
 /logs/*.log

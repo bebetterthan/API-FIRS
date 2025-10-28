@@ -28,7 +28,7 @@ class FileManager {
         $this->ensureDir($baseDir);
         $filename = $sanitizedIRN . '.json';
         $filepath = $baseDir . '/' . $filename;
-        
+
         $jsonContent = json_encode($invoice, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
         // Use LOCK_EX for atomic write and FILE_APPEND for buffering
         $result = file_put_contents($filepath, $jsonContent, LOCK_EX);

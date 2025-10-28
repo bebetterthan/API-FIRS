@@ -120,7 +120,7 @@ class Router {
     protected function signInvoice(array $params): void {
         $startTime = microtime(true);
         $timings = [];
-        
+
         require_once __DIR__ . '/Validator.php';
         require_once __DIR__ . '/IRNProcessor.php';
         require_once __DIR__ . '/CryptoService.php';
@@ -128,8 +128,9 @@ class Router {
         require_once __DIR__ . '/FileManager.php';
         require_once __DIR__ . '/InvoiceManager.php';
         require_once __DIR__ . '/FIRSAPIClient.php';
+        require_once __DIR__ . '/LogManager.php';
         $body = $this->getJsonBody();
-        
+
         $stepStart = microtime(true);
         $validator = new Validator($this->config);
         $validation = $validator->validateFull($body);
@@ -137,35 +138,35 @@ class Router {
             $this->responseBuilder->validationError($validation['errors'], 'Validation failed');
         }
         $timings['validation'] = round((microtime(true) - $stepStart) * 1000, 2);
-        
+
         try {
             $stepStart = microtime(true);
             $irnProcessor = new IRNProcessor($this->config);
             $irn = $irnProcessor->extractIRN($body);
             $signedIRN = $irnProcessor->formatSignedIRN($irn);
             $timings['irn_processing'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
             $stepStart = microtime(true);
             $invoiceManager = new InvoiceManager($this->config);
             if ($invoiceManager->isDuplicate($irn)) {
                 $this->responseBuilder->error('Invoice with this IRN already exists', 'DUPLICATE_IRN', null, 409);
             }
             $timings['duplicate_check'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
             $fileManager = new FileManager($this->config);
-            
+
             // Save JSON with signedIRN (includes timestamp) as filename
             $stepStart = microtime(true);
             $jsonFile = $fileManager->saveInvoiceJSON($signedIRN, $body);
             $timings['save_json'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
             $savedInvoiceData = json_decode(file_get_contents($jsonFile), true);
-            
+
             $stepStart = microtime(true);
             $crypto = new CryptoService($this->config);
             $encryptedData = $crypto->encryptIRN($irn, $signedIRN);
             $timings['encryption'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
             // Save Base64 encrypted data with signedIRN as filename
             $stepStart = microtime(true);
             $encryptedFile = $fileManager->saveEncryptedData($irn, $signedIRN, $encryptedData, $savedInvoiceData);
@@ -178,22 +179,92 @@ class Router {
             // Generate QR with signedIRN as filename
             $qrFile = $qrGenerator->generate($base64DataFromFile, $signedIRN);
             $timings['qr_generation'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
             $stepStart = microtime(true);
             $invoiceManager->createInvoiceRecord($irn, $signedIRN, $body, $encryptedFile, $qrFile);
             $timings['save_record'] = round((microtime(true) - $stepStart) * 1000, 2);
-            
+
+            // Initialize LogManager for API response logging
+            $logManager = new LogManager($this->config);
+
             $firsResponse = null;
             if ($this->config['firs_api']['enabled']) {
                 $stepStart = microtime(true);
                 $firsClient = new FIRSAPIClient($this->config);
-                $firsResponse = $firsClient->submitInvoice($body);
-                $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
-                error_log(sprintf('[FIRS API] Invoice %s submitted: %s', $irn, json_encode($firsResponse)));
+                
+                try {
+                    $firsResponse = $firsClient->submitInvoice($body);
+                    $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
+                    
+                    $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+                    
+                    // Log success to api_success.log with detailed information
+                    $logManager->logSuccess(
+                        $irn, 
+                        $signedIRN, 
+                        [
+                            'json' => $jsonFile,
+                            'encrypted' => $encryptedFile,
+                            'qr_code' => $qrFile,
+                        ], 
+                        $firsResponse,
+                        $body, // Invoice data for details
+                        [
+                            'total_time_ms' => $totalTime,
+                            'breakdown' => $timings,
+                        ]
+                    );
+                    
+                    error_log(sprintf('[FIRS API SUCCESS] Invoice %s submitted successfully', $irn));
+                } catch (\Exception $apiException) {
+                    $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
+                    
+                    // Log error to api_error.log with detailed information
+                    $logManager->logException(
+                        $irn, 
+                        $apiException, 
+                        'firs_api_submission',
+                        [
+                            'endpoint' => '/api/v1/invoice/sign',
+                            'http_code' => $apiException->getCode(),
+                            'files_created' => [
+                                'json' => basename($jsonFile),
+                                'encrypted' => basename($encryptedFile),
+                                'qr_code' => basename($qrFile),
+                            ],
+                        ]
+                    );
+                    
+                    error_log(sprintf('[FIRS API ERROR] Invoice %s failed: %s', $irn, $apiException->getMessage()));
+                    
+                    // Continue processing even if FIRS API fails
+                    $firsResponse = [
+                        'status' => 'error',
+                        'message' => $apiException->getMessage(),
+                    ];
+                }
+            } else {
+                // Log local success (FIRS API disabled)
+                $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+                $logManager->logSuccess(
+                    $irn, 
+                    $signedIRN, 
+                    [
+                        'json' => $jsonFile,
+                        'encrypted' => $encryptedFile,
+                        'qr_code' => $qrFile,
+                    ], 
+                    ['status' => 'disabled', 'message' => 'FIRS API integration disabled'],
+                    $body,
+                    [
+                        'total_time_ms' => $totalTime,
+                        'breakdown' => $timings,
+                    ]
+                );
             }
-            
+
             $totalTime = round((microtime(true) - $startTime) * 1000, 2);
-            
+
             $responseData = [
                 'irn' => $irn,
                 'irn_signed' => $signedIRN,
@@ -213,6 +284,29 @@ class Router {
             }
             $this->responseBuilder->success($responseData, 'Invoice signed successfully');
         } catch (\Exception $e) {
+            // Log processing error
+            require_once __DIR__ . '/LogManager.php';
+            $logManager = new LogManager($this->config);
+            
+            // Try to extract IRN from body if available
+            $errorIRN = 'unknown';
+            try {
+                $errorBody = $this->getJsonBody();
+                $errorIRN = $errorBody['irn'] ?? 'unknown';
+            } catch (\Exception $ex) {
+                // Ignore if can't get body
+            }
+            
+            $logManager->logException(
+                $errorIRN,
+                $e,
+                'invoice_processing',
+                [
+                    'error_stage' => 'general_processing',
+                    'error_code' => $e->getCode(),
+                ]
+            );
+            
             $this->responseBuilder->error($e->getMessage(), 'PROCESSING_ERROR', $e->getTrace(), 500);
         }
     }

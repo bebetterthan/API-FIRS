@@ -50,14 +50,14 @@ class QRGenerator {
         try {
             $qrcode = new QRCode(self::$qrOptions);
             $qrcode->render($encryptedData, $filepath);
-            
+
             if (!file_exists($filepath)) {
                 throw new \Exception('QR code file was not created');
             }
-            
+
             // Resize to 300x300px to save storage
             $this->resizeImage($filepath, 300, 300);
-            
+
             return $filepath;
         } catch (\Exception $e) {
             throw new \Exception('QR code generation failed: ' . $e->getMessage());
@@ -71,14 +71,14 @@ class QRGenerator {
         if (!extension_loaded('gd')) {
             return; // Skip resize if GD not available
         }
-        
+
         $source = imagecreatefrompng($filepath);
         if (!$source) {
             return;
         }
-        
+
         $dest = imagecreatetruecolor($width, $height);
-        
+
         // Enable better resampling for smaller files
         imagecopyresampled(
             $dest, $source,
@@ -86,7 +86,7 @@ class QRGenerator {
             $width, $height,
             imagesx($source), imagesy($source)
         );
-        
+
         // Compression level 9 = max compression (0-9, where 9 is smallest file)
         imagepng($dest, $filepath, 9);
         imagedestroy($source);

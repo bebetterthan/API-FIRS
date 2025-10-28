@@ -97,6 +97,8 @@ return [
         'sftp_sync_log' => __DIR__ . '/logs/sftp_sync.log',
         'error_log' => __DIR__ . '/logs/error.log',
         'processing_log' => __DIR__ . '/logs/processing.log',
+        'api_success_log' => __DIR__ . '/logs/api_success.log',
+        'api_error_log' => __DIR__ . '/logs/api_error.log',
     ],
     'qr' => [
         'size' => 300,
