@@ -23,7 +23,7 @@ class LogManager {
     }
 
     /**
-     * Log successful API response
+     * Log successful API response (optimized for MS SQL Server storage)
      * 
      * @param string $irn Original IRN
      * @param string $signedIRN Signed IRN with timestamp
@@ -34,47 +34,26 @@ class LogManager {
      * @return void
      */
     public function logSuccess(string $irn, string $signedIRN, array $files, ?array $apiResponse = null, ?array $invoiceData = null, ?array $timings = null): void {
-        // Get file sizes
-        $fileSizes = [];
-        foreach ($files as $type => $path) {
-            if (file_exists($path)) {
-                $fileSizes[$type] = [
-                    'path' => $path,
-                    'filename' => basename($path),
-                    'size_bytes' => filesize($path),
-                    'size_kb' => round(filesize($path) / 1024, 2),
-                ];
-            }
-        }
-
+        // Compact log entry optimized for database storage
         $logEntry = [
             'timestamp' => date('Y-m-d H:i:s'),
             'type' => 'SUCCESS',
             'irn' => $irn,
-            'irn_signed' => $signedIRN,
-            'invoice_details' => $invoiceData ? [
-                'business_id' => $invoiceData['business_id'] ?? 'N/A',
-                'issue_date' => $invoiceData['issue_date'] ?? 'N/A',
-                'supplier' => $invoiceData['accounting_supplier_party']['party_name'] ?? 'N/A',
-                'customer' => $invoiceData['accounting_customer_party']['party_name'] ?? 'N/A',
-                'total_amount' => $invoiceData['legal_monetary_total']['payable_amount'] ?? 'N/A',
-                'currency' => $invoiceData['document_currency_code'] ?? 'N/A',
-                'payment_status' => $invoiceData['payment_status'] ?? 'N/A',
-            ] : null,
-            'files_created' => $fileSizes,
-            'api_response' => $apiResponse ? [
-                'status' => $apiResponse['status'] ?? 'N/A',
-                'http_code' => $apiResponse['http_code'] ?? 'N/A',
-                'data' => $apiResponse['data'] ?? null,
-            ] : null,
-            'performance' => $timings,
+            'business_id' => $invoiceData['business_id'] ?? 'N/A',
+            'supplier' => $this->truncate($invoiceData['accounting_supplier_party']['party_name'] ?? 'N/A', 100),
+            'customer' => $this->truncate($invoiceData['accounting_customer_party']['party_name'] ?? 'N/A', 100),
+            'amount' => $invoiceData['legal_monetary_total']['payable_amount'] ?? 0,
+            'currency' => $invoiceData['document_currency_code'] ?? 'NGN',
+            'http_code' => $apiResponse['http_code'] ?? 200,
+            'files' => implode(',', array_map(fn($f) => basename($f), $files)), // json.txt,encrypted.txt,qr.png
+            'process_time' => isset($timings['total']) ? round($timings['total'], 2) . 'ms' : null,
         ];
 
         $this->writeLog($this->successLogFile, $logEntry);
     }
 
     /**
-     * Log error from API response
+     * Log error from API response (optimized for MS SQL Server storage)
      * 
      * @param string $irn Original IRN
      * @param int $httpCode HTTP status code
@@ -85,29 +64,35 @@ class LogManager {
      * @return void
      */
     public function logError(string $irn, int $httpCode, string $errorMessage, ?array $errorDetails = null, ?array $requestPayload = null, ?string $errorType = null): void {
+        // Compact error details - combine error_message and error_details
+        $fullErrorMsg = $errorMessage;
+        if ($errorDetails) {
+            if (is_array($errorDetails)) {
+                $fullErrorMsg .= ' | ' . json_encode($errorDetails, JSON_UNESCAPED_SLASHES);
+            } else {
+                $fullErrorMsg .= ' | ' . $errorDetails;
+            }
+        }
+
         $logEntry = [
             'timestamp' => date('Y-m-d H:i:s'),
             'type' => 'ERROR',
             'error_type' => $errorType ?? 'unknown',
             'irn' => $irn,
+            'business_id' => $requestPayload['business_id'] ?? 'N/A',
+            'supplier' => $this->truncate($requestPayload['accounting_supplier_party']['party_name'] ?? 'N/A', 100),
+            'customer' => $this->truncate($requestPayload['accounting_customer_party']['party_name'] ?? 'N/A', 100),
+            'amount' => $requestPayload['legal_monetary_total']['payable_amount'] ?? 0,
+            'currency' => $requestPayload['document_currency_code'] ?? 'NGN',
             'http_code' => $httpCode,
-            'error_message' => $errorMessage,
-            'error_details' => $errorDetails,
-            'request_summary' => $requestPayload ? [
-                'business_id' => $requestPayload['business_id'] ?? 'N/A',
-                'issue_date' => $requestPayload['issue_date'] ?? 'N/A',
-                'total_amount' => $requestPayload['legal_monetary_total']['payable_amount'] ?? 'N/A',
-                'currency' => $requestPayload['document_currency_code'] ?? 'N/A',
-                'supplier' => $requestPayload['accounting_supplier_party']['party_name'] ?? 'N/A',
-                'customer' => $requestPayload['accounting_customer_party']['party_name'] ?? 'N/A',
-            ] : null,
+            'error' => $this->truncate($fullErrorMsg, 500), // Limit error message to 500 chars
         ];
 
         $this->writeLog($this->errorLogFile, $logEntry);
     }
 
     /**
-     * Log exception during processing
+     * Log exception during processing (optimized for MS SQL Server storage)
      * 
      * @param string $irn Original IRN
      * @param \Exception $exception Exception object
@@ -116,23 +101,37 @@ class LogManager {
      * @return void
      */
     public function logException(string $irn, \Exception $exception, string $context = 'processing', ?array $additionalContext = null): void {
+        // Compact exception info - combine file:line with message
+        $exceptionInfo = basename($exception->getFile()) . ':' . $exception->getLine() . ' - ' . $exception->getMessage();
+        if ($additionalContext) {
+            $exceptionInfo .= ' | ' . json_encode($additionalContext, JSON_UNESCAPED_SLASHES);
+        }
+
         $logEntry = [
             'timestamp' => date('Y-m-d H:i:s'),
             'type' => 'EXCEPTION',
             'error_type' => 'exception',
             'irn' => $irn,
             'context' => $context,
-            'exception' => [
-                'message' => $exception->getMessage(),
-                'code' => $exception->getCode(),
-                'file' => $exception->getFile(),
-                'line' => $exception->getLine(),
-                'trace' => array_slice($exception->getTrace(), 0, 5), // First 5 stack frames
-            ],
-            'additional_context' => $additionalContext,
+            'http_code' => $exception->getCode() ?: 500,
+            'error' => $this->truncate($exceptionInfo, 500),
         ];
 
         $this->writeLog($this->errorLogFile, $logEntry);
+    }
+
+    /**
+     * Truncate string to specified length with ellipsis
+     * 
+     * @param string $str String to truncate
+     * @param int $length Maximum length
+     * @return string Truncated string
+     */
+    private function truncate(string $str, int $length): string {
+        if (strlen($str) <= $length) {
+            return $str;
+        }
+        return substr($str, 0, $length - 3) . '...';
     }
 
     /**
