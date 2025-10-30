@@ -487,9 +487,7 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
             continue
         fi
 
-        # Create signed IRN with timestamp (only for JSON signed, not for Base64/QR)
-        TIMESTAMP=$(date +%s)
-        IRN_SIGNED="${IRN}.${TIMESTAMP}"
+        # No timestamp needed - all files use IRN only
 
         # Encrypt using PHP inline with crypto_keys
         CRYPTO_KEYS_FILE="./storage/crypto_keys.txt"
@@ -514,8 +512,8 @@ if (!\$publicKey) {
     fwrite(STDERR, 'ERROR: Invalid public key' . PHP_EOL);
     exit(1);
 }
-\$irnSigned = '$IRN_SIGNED';
-\$payload = json_encode(['irn' => \$irnSigned, 'certificate' => \$keys['certificate']], JSON_UNESCAPED_SLASHES);
+\$irn = '$IRN';
+\$payload = json_encode(['irn' => \$irn, 'certificate' => \$keys['certificate']], JSON_UNESCAPED_SLASHES);
 \$encrypted = '';
 \$result = openssl_public_encrypt(\$payload, \$encrypted, \$publicKey, OPENSSL_PKCS1_PADDING);
 if (!\$result) {
@@ -535,14 +533,14 @@ echo base64_encode(\$encrypted);
         echo -e "    ${GREEN}✓ Encrypted with crypto_keys (${#ENCRYPTED_DATA} bytes base64)${NC}"
     fi
 
-    if [ -z "$IRN_SIGNED" ]; then
-        echo -e "    ${RED}✗ Cannot extract IRN from response${NC}"
+    if [ -z "$IRN" ]; then
+        echo -e "    ${RED}✗ Cannot extract IRN${NC}"
         ERRORS=$((ERRORS + 1))
         echo ""
         continue
     fi
 
-    # Define file paths - Base64 and QR use IRN only (no timestamp)
+    # Define file paths - All files use IRN only (no timestamp)
     # This ensures files are automatically replaced if same IRN is processed again
     BASE64_DIR="${OUTPUT_BASE}/QR/QR_txt"
     QR_DIR="${OUTPUT_BASE}/QR/QR_img"
@@ -624,8 +622,8 @@ echo base64_encode(\$encrypted);
         echo -e "${GREEN}Pipeline completed successfully!${NC}"
         SUCCESS=$((SUCCESS + 1))
 
-        # Save JSON signed (directory already created above)
-        JSON_SIGNED_FILE="${JSON_SIGNED_DIR}/${IRN_SIGNED}.json"
+        # Save JSON signed without timestamp (same as Base64/QR - will auto-replace)
+        JSON_SIGNED_FILE="${JSON_SIGNED_DIR}/${IRN}.json"
 
         echo -e "    ${CYAN}→ Saving JSON signed...${NC}"
         if cp "$JSON_FILE" "$JSON_SIGNED_FILE"; then
@@ -634,8 +632,8 @@ echo base64_encode(\$encrypted);
             echo -e "    ${YELLOW}⚠ Failed to save JSON signed${NC}"
         fi
 
-        # Log success with detailed information
-        log_success "$IRN" "$IRN_SIGNED" "$JSON_SIGNED_FILE" "$BASE64_PATH" "$QR_PATH" "$HTTP_CODE" "$SUPPLIER" "$CUSTOMER" "$TOTAL" "$CURRENCY"
+        # Log success with detailed information (use IRN for both parameters since no timestamp)
+        log_success "$IRN" "$IRN" "$JSON_SIGNED_FILE" "$BASE64_PATH" "$QR_PATH" "$HTTP_CODE" "$SUPPLIER" "$CUSTOMER" "$TOTAL" "$CURRENCY"
 
         # Delete original JSON file after successful processing
         echo -e "    ${CYAN}→ Deleting source JSON file...${NC}"

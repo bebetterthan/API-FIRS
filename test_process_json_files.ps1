@@ -407,9 +407,7 @@ foreach ($jsonFileItem in $jsonFiles) {
         Write-Host "    ✓ FIRS validation confirmed" -ForegroundColor Green
         Write-Host "    Encrypting with crypto_keys..."
 
-        # Create signed IRN with timestamp
-        $TIMESTAMP = [int][double]::Parse((Get-Date -UFormat %s))
-        $IRN_SIGNED = "$IRN.$TIMESTAMP"
+        # No timestamp needed - all files use IRN only
 
         # Encrypt using PHP
         $CRYPTO_KEYS_FILE = ".\storage\crypto_keys.txt"
@@ -433,8 +431,8 @@ if (!`$publicKey) {
     fwrite(STDERR, 'ERROR: Invalid public key' . PHP_EOL);
     exit(1);
 }
-`$irnSigned = '$IRN_SIGNED';
-`$payload = json_encode(['irn' => `$irnSigned, 'certificate' => `$keys['certificate']], JSON_UNESCAPED_SLASHES);
+`$irn = '$IRN';
+`$payload = json_encode(['irn' => `$irn, 'certificate' => `$keys['certificate']], JSON_UNESCAPED_SLASHES);
 `$encrypted = '';
 `$result = openssl_public_encrypt(`$payload, `$encrypted, `$publicKey, OPENSSL_PKCS1_PADDING);
 if (!`$result) {
@@ -456,14 +454,14 @@ echo base64_encode(`$encrypted);
         Write-Host "    ✓ Encrypted with crypto_keys ($($ENCRYPTED_DATA.Length) bytes base64)" -ForegroundColor Green
     }
 
-    if (-not $IRN_SIGNED) {
-        Write-Host "    ✗ Cannot extract IRN from response" -ForegroundColor Red
+    if (-not $IRN) {
+        Write-Host "    ✗ Cannot extract IRN" -ForegroundColor Red
         $ERRORS++
         Write-Host ""
         continue
     }
 
-    # Define file paths - Base64 and QR use IRN only (no timestamp)
+    # Define file paths - All files use IRN only (no timestamp)
     # This ensures files are automatically replaced if same IRN is processed again
     $BASE64_DIR = Join-Path $OUTPUT_BASE "QR\QR_txt"
     $QR_DIR = Join-Path $OUTPUT_BASE "QR\QR_img"
@@ -553,19 +551,19 @@ try {
         Write-Host "Pipeline completed successfully!" -ForegroundColor Green
         $SUCCESS++
         
-        # Save JSON signed (directory already created above)
-        $JSON_SIGNED_FILE = Join-Path $JSON_SIGNED_DIR "$IRN_SIGNED.json"
+        # Save JSON signed without timestamp (same as Base64/QR - will auto-replace)
+        $JSON_SIGNED_FILE = Join-Path $JSON_SIGNED_DIR "$IRN.json"
         
         Write-Host "    → Saving JSON signed..." -ForegroundColor Cyan
         try {
             Copy-Item -Path $JSON_FILE -Destination $JSON_SIGNED_FILE -Force
-            Write-Host "    ✓ JSON signed saved: $IRN_SIGNED.json" -ForegroundColor Green
+            Write-Host "    ✓ JSON signed saved: $IRN.json" -ForegroundColor Green
         } catch {
             Write-Host "    ⚠ Failed to save JSON signed" -ForegroundColor Yellow
         }
         
-        # Log success with detailed information
-        Write-SuccessLog -IRN $IRN -IRNSigned $IRN_SIGNED -JSONFile $JSON_SIGNED_FILE -Base64File $BASE64_PATH -QRFile $QR_PATH -HTTPCode $HTTP_CODE -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -Currency $CURRENCY
+        # Log success with detailed information (use IRN for both parameters since no timestamp)
+        Write-SuccessLog -IRN $IRN -IRNSigned $IRN -JSONFile $JSON_SIGNED_FILE -Base64File $BASE64_PATH -QRFile $QR_PATH -HTTPCode $HTTP_CODE -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -Currency $CURRENCY
         
         # Delete original JSON file after successful processing
         Write-Host "    → Deleting source JSON file..." -ForegroundColor Cyan
