@@ -67,6 +67,32 @@ class FIRSAPIClient {
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->config['firs_api']['timeout']);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
 
+        // SSL/TLS Configuration for Windows Server compatibility
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+        
+        // Windows Server: Use system CA bundle
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // On Windows, try to use system CA bundle
+            $caPath = ini_get('curl.cainfo');
+            if (!$caPath || !file_exists($caPath)) {
+                // Try common locations for CA bundle on Windows
+                $possiblePaths = [
+                    'C:/www/php/extras/ssl/cacert.pem',
+                    'C:/php/extras/ssl/cacert.pem',
+                    dirname(PHP_BINARY) . '/extras/ssl/cacert.pem',
+                    dirname(PHP_BINARY) . '/cacert.pem',
+                ];
+                
+                foreach ($possiblePaths as $path) {
+                    if (file_exists($path)) {
+                        curl_setopt($ch, CURLOPT_CAINFO, $path);
+                        break;
+                    }
+                }
+            }
+        }
 
         $headers = [
             'Content-Type: application/json',
@@ -124,6 +150,11 @@ class FIRSAPIClient {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 5);
             curl_setopt($ch, CURLOPT_NOBODY, true);
+            
+            // SSL/TLS Configuration for Windows Server
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            curl_setopt($ch, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
 
             curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
