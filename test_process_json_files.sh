@@ -24,7 +24,7 @@ JSON_DIR="${JSON_DIR:-C:/www/wwwroot/sftp/user_data}"
 OUTPUT_BASE="${OUTPUT_BASE:-C:/www/wwwroot/sftp/user_data}"
 BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"  # FIRS production API
 X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
-X_API_SECRET="${X_API_SECRET:-c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4rZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC}"
+X_API_SECRET="${X_API_SECRET:-c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4'PFrZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC}"
 
 # Workflow: JSON → FIRS validation → Local encrypt (crypto_keys) → Local QR → Save files
 
@@ -71,28 +71,28 @@ log_success() {
     local customer="${8:-N/A}"
     local total_amount="${9:-N/A}"
     local currency="${10:-N/A}"
-    
+
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     # Get file sizes
     local json_size=0
     local base64_size=0
     local qr_size=0
-    
+
     if [ -f "$json_file" ]; then
         json_size=$(stat -c%s "$json_file" 2>/dev/null || stat -f%z "$json_file" 2>/dev/null || echo "0")
     fi
-    
+
     if [ -f "$base64_file" ]; then
         base64_size=$(stat -c%s "$base64_file" 2>/dev/null || stat -f%z "$base64_file" 2>/dev/null || echo "0")
     fi
-    
+
     if [ -f "$qr_file" ]; then
         qr_size=$(stat -c%s "$qr_file" 2>/dev/null || stat -f%z "$qr_file" 2>/dev/null || echo "0")
     fi
-    
+
     local qr_size_kb=$(echo "scale=2; $qr_size / 1024" | bc 2>/dev/null || echo "0")
-    
+
     local log_entry=$(cat <<EOF
 {"timestamp":"${timestamp}","type":"SUCCESS","irn":"${irn}","irn_signed":"${irn_signed}","invoice_details":{"supplier":"${supplier}","customer":"${customer}","total_amount":"${total_amount}","currency":"${currency}"},"files_created":{"json":{"filename":"$(basename "$json_file")","path":"${json_file}","size_bytes":${json_size},"size_kb":$(echo "scale=2; $json_size / 1024" | bc 2>/dev/null || echo "0")},"encrypted":{"filename":"$(basename "$base64_file")","path":"${base64_file}","size_bytes":${base64_size},"size_kb":$(echo "scale=2; $base64_size / 1024" | bc 2>/dev/null || echo "0")},"qr_code":{"filename":"$(basename "$qr_file")","path":"${qr_file}","size_bytes":${qr_size},"size_kb":${qr_size_kb}}},"api_response":{"status":"success","http_code":${http_code}}}
 EOF
@@ -110,12 +110,12 @@ log_error() {
     local supplier="${6:-N/A}"
     local customer="${7:-N/A}"
     local total_amount="${8:-N/A}"
-    
+
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     # Escape quotes in error message
     error_message=$(echo "$error_message" | sed 's/"/\\"/g' | head -c 500)
     error_details=$(echo "$error_details" | sed 's/"/\\"/g' | head -c 500)
-    
+
     local log_entry=$(cat <<EOF
 {"timestamp":"${timestamp}","type":"ERROR","error_type":"${error_type}","irn":"${irn}","http_code":${http_code},"error_message":"${error_message}","error_details":"${error_details}","request_summary":{"supplier":"${supplier}","customer":"${customer}","total_amount":"${total_amount}"}}
 EOF
@@ -379,7 +379,7 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
 
         if [ "$IS_DUPLICATE" = true ]; then
             echo -e "  ${YELLOW}⚠ Duplicate IRN (already validated by FIRS)${NC}"
-            
+
             # Log as error (duplicate)
             log_error "$IRN" "$HTTP_CODE" "Duplicate IRN - already exists" "$ERROR_DETAILS" "duplicate" "$SUPPLIER" "$CUSTOMER" "$TOTAL"
 
@@ -487,7 +487,7 @@ for JSON_FILE in "$JSON_DIR"/*.json; do
             continue
         fi
 
-        # Create signed IRN with timestamp
+        # Create signed IRN with timestamp (only for JSON signed, not for Base64/QR)
         TIMESTAMP=$(date +%s)
         IRN_SIGNED="${IRN}.${TIMESTAMP}"
 
@@ -542,23 +542,33 @@ echo base64_encode(\$encrypted);
         continue
     fi
 
-    # Define file paths based on signed IRN
+    # Define file paths - Base64 and QR use IRN only (no timestamp)
+    # This ensures files are automatically replaced if same IRN is processed again
     BASE64_DIR="${OUTPUT_BASE}/QR/QR_txt"
     QR_DIR="${OUTPUT_BASE}/QR/QR_img"
+    JSON_SIGNED_DIR="${OUTPUT_BASE}/json_signed"
 
     # Create directories if not exist
     mkdir -p "$BASE64_DIR" 2>/dev/null
     mkdir -p "$QR_DIR" 2>/dev/null
+    mkdir -p "$JSON_SIGNED_DIR" 2>/dev/null
 
-    BASE64_PATH="${BASE64_DIR}/${IRN_SIGNED}.txt"
-    QR_PATH="${QR_DIR}/${IRN_SIGNED}.png"
+    # File paths: Base64 and QR without timestamp (will replace if exists)
+    BASE64_PATH="${BASE64_DIR}/${IRN}.txt"
+    QR_PATH="${QR_DIR}/${IRN}.png"
+    
+    # Check if files already exist
+    if [ -f "$BASE64_PATH" ] || [ -f "$QR_PATH" ]; then
+        echo -e "    ${YELLOW}⚠ Files with IRN ${IRN} already exist${NC}"
+        echo -e "    ${CYAN}→ Will replace existing files with new generation${NC}"
+    fi
 
     # Save Base64 encrypted data
     if [ -n "$ENCRYPTED_DATA" ]; then
         echo "$ENCRYPTED_DATA" > "$BASE64_PATH"
         if [ -f "$BASE64_PATH" ]; then
             B64_SIZE=$(stat -c%s "$BASE64_PATH" 2>/dev/null || stat -f%z "$BASE64_PATH" 2>/dev/null || wc -c < "$BASE64_PATH" 2>/dev/null || echo "?")
-            echo -e "    ${GREEN}✓ Base64: ${IRN_SIGNED}.txt (${B64_SIZE} bytes)${NC}"
+            echo -e "    ${GREEN}✓ Base64: ${IRN}.txt (${B64_SIZE} bytes)${NC}"
             FILES_CREATED=$((FILES_CREATED + 1))
         else
             echo -e "    ${RED}✗ Failed to save Base64 file${NC}"
@@ -592,7 +602,7 @@ echo base64_encode(\$encrypted);
         if [ "$QR_RESULT" = "SUCCESS" ] && [ -f "$QR_PATH" ]; then
             QR_SIZE=$(stat -c%s "$QR_PATH" 2>/dev/null || stat -f%z "$QR_PATH" 2>/dev/null || wc -c < "$QR_PATH" 2>/dev/null || echo "0")
             QR_SIZE_KB=$(echo "scale=1; $QR_SIZE / 1024" | bc 2>/dev/null || echo "$((QR_SIZE / 1024))")
-            echo -e "    ${GREEN}✓ QR PNG: ${IRN_SIGNED}.png (${QR_SIZE_KB} KB)${NC}"
+            echo -e "    ${GREEN}✓ QR PNG: ${IRN}.png (${QR_SIZE_KB} KB)${NC}"
             FILES_CREATED=$((FILES_CREATED + 1))
         else
             echo -e "    ${RED}✗ Failed to generate QR code${NC}"
@@ -613,23 +623,20 @@ echo base64_encode(\$encrypted);
     if [ $FILES_CREATED -eq 3 ]; then
         echo -e "${GREEN}Pipeline completed successfully!${NC}"
         SUCCESS=$((SUCCESS + 1))
-        
-        # Save JSON signed before deleting source
-        JSON_SIGNED_DIR="${OUTPUT_BASE}/json_signed"
-        mkdir -p "$JSON_SIGNED_DIR" 2>/dev/null
-        
+
+        # Save JSON signed (directory already created above)
         JSON_SIGNED_FILE="${JSON_SIGNED_DIR}/${IRN_SIGNED}.json"
-        
+
         echo -e "    ${CYAN}→ Saving JSON signed...${NC}"
         if cp "$JSON_FILE" "$JSON_SIGNED_FILE"; then
             echo -e "    ${GREEN}✓ JSON signed saved: $(basename "$JSON_SIGNED_FILE")${NC}"
         else
             echo -e "    ${YELLOW}⚠ Failed to save JSON signed${NC}"
         fi
-        
+
         # Log success with detailed information
         log_success "$IRN" "$IRN_SIGNED" "$JSON_SIGNED_FILE" "$BASE64_PATH" "$QR_PATH" "$HTTP_CODE" "$SUPPLIER" "$CUSTOMER" "$TOTAL" "$CURRENCY"
-        
+
         # Delete original JSON file after successful processing
         echo -e "    ${CYAN}→ Deleting source JSON file...${NC}"
         if rm -f "$JSON_FILE"; then
@@ -639,10 +646,10 @@ echo base64_encode(\$encrypted);
         fi
     else
         echo -e "${YELLOW}Pipeline completed with missing files (${FILES_CREATED}/3)${NC}"
-        
+
         # Log error for incomplete processing with details
         log_error "$IRN" "0" "Incomplete file generation" "Only ${FILES_CREATED}/3 files created" "processing_error" "$SUPPLIER" "$CUSTOMER" "$TOTAL"
-        
+
         ERRORS=$((ERRORS + 1))
     fi
 

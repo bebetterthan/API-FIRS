@@ -463,9 +463,11 @@ echo base64_encode(`$encrypted);
         continue
     }
 
-    # Define file paths
+    # Define file paths - Base64 and QR use IRN only (no timestamp)
+    # This ensures files are automatically replaced if same IRN is processed again
     $BASE64_DIR = Join-Path $OUTPUT_BASE "QR\QR_txt"
     $QR_DIR = Join-Path $OUTPUT_BASE "QR\QR_img"
+    $JSON_SIGNED_DIR = Join-Path $OUTPUT_BASE "json_signed"
 
     # Create directories
     if (-not (Test-Path $BASE64_DIR)) {
@@ -474,16 +476,26 @@ echo base64_encode(`$encrypted);
     if (-not (Test-Path $QR_DIR)) {
         New-Item -ItemType Directory -Path $QR_DIR -Force | Out-Null
     }
+    if (-not (Test-Path $JSON_SIGNED_DIR)) {
+        New-Item -ItemType Directory -Path $JSON_SIGNED_DIR -Force | Out-Null
+    }
 
-    $BASE64_PATH = Join-Path $BASE64_DIR "$IRN_SIGNED.txt"
-    $QR_PATH = Join-Path $QR_DIR "$IRN_SIGNED.png"
+    # File paths: Base64 and QR without timestamp (will replace if exists)
+    $BASE64_PATH = Join-Path $BASE64_DIR "$IRN.txt"
+    $QR_PATH = Join-Path $QR_DIR "$IRN.png"
+    
+    # Check if files already exist
+    if ((Test-Path $BASE64_PATH) -or (Test-Path $QR_PATH)) {
+        Write-Host "    ⚠ Files with IRN $IRN already exist" -ForegroundColor Yellow
+        Write-Host "    → Will replace existing files with new generation" -ForegroundColor Cyan
+    }
 
     # Save Base64 encrypted data
     if ($ENCRYPTED_DATA) {
         Set-Content -Path $BASE64_PATH -Value $ENCRYPTED_DATA -NoNewline
         if (Test-Path $BASE64_PATH) {
             $B64_SIZE = (Get-Item $BASE64_PATH).Length
-            Write-Host "    ✓ Base64: $IRN_SIGNED.txt ($B64_SIZE bytes)" -ForegroundColor Green
+            Write-Host "    ✓ Base64: $IRN.txt ($B64_SIZE bytes)" -ForegroundColor Green
             $FILES_CREATED++
         } else {
             Write-Host "    ✗ Failed to save Base64 file" -ForegroundColor Red
@@ -519,7 +531,7 @@ try {
         if ($QR_RESULT -eq "SUCCESS" -and (Test-Path $QR_PATH)) {
             $QR_SIZE = (Get-Item $QR_PATH).Length
             $QR_SIZE_KB = [Math]::Round($QR_SIZE / 1024, 1)
-            Write-Host "    ✓ QR PNG: $IRN_SIGNED.png ($QR_SIZE_KB KB)" -ForegroundColor Green
+            Write-Host "    ✓ QR PNG: $IRN.png ($QR_SIZE_KB KB)" -ForegroundColor Green
             $FILES_CREATED++
         } else {
             Write-Host "    ✗ Failed to generate QR code" -ForegroundColor Red
@@ -541,12 +553,7 @@ try {
         Write-Host "Pipeline completed successfully!" -ForegroundColor Green
         $SUCCESS++
         
-        # Save JSON signed before deleting source
-        $JSON_SIGNED_DIR = Join-Path $OUTPUT_BASE "json_signed"
-        if (-not (Test-Path $JSON_SIGNED_DIR)) {
-            New-Item -ItemType Directory -Path $JSON_SIGNED_DIR -Force | Out-Null
-        }
-        
+        # Save JSON signed (directory already created above)
         $JSON_SIGNED_FILE = Join-Path $JSON_SIGNED_DIR "$IRN_SIGNED.json"
         
         Write-Host "    → Saving JSON signed..." -ForegroundColor Cyan
