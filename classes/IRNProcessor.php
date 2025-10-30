@@ -34,16 +34,14 @@ class IRNProcessor {
 
 
     public function formatSignedIRN(string $irn, ?int $timestamp = null): string {
-        if ($timestamp === null) {
-            $timestamp = time();
-        }
-
-        return $irn . '.' . $timestamp;
+        // No timestamp - just return IRN as is
+        // This prevents duplicate files when same IRN is processed multiple times
+        return $irn;
     }
 
 
     public function sanitizeForFilename(string $irn): string {
-        // IRN dengan timestamp untuk filename: PFNLXXXX-YYYYYY-YYYYMMDD.timestamp
+        // IRN only (no timestamp) for filename: PFNLXXXX-YYYYYY-YYYYMMDD
         // Keep dots, alphanumeric, and hyphens only
         $sanitized = preg_replace('/[^A-Z0-9.-]/i', '', $irn);
 

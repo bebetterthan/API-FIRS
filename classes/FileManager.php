@@ -22,7 +22,7 @@ class FileManager {
 
     public function saveInvoiceJSON(string $signedIRN, array $invoice): string {
         $irnProcessor = new IRNProcessor($this->config);
-        // Use signedIRN (includes timestamp) for filename
+        // Use IRN for filename (no timestamp - will auto-replace if exists)
         $sanitizedIRN = $irnProcessor->sanitizeForFilename($signedIRN);
         $baseDir = $this->config['paths']['json'];
         $this->ensureDir($baseDir);
@@ -40,7 +40,7 @@ class FileManager {
 
     public function saveEncryptedData(string $irn, string $signedIRN, string $encryptedData, array $invoice): string {
         $irnProcessor = new IRNProcessor($this->config);
-        // Use signedIRN (includes timestamp) for filename
+        // Use IRN for filename (no timestamp - will auto-replace if exists)
         $sanitizedIRN = $irnProcessor->sanitizeForFilename($signedIRN);
         $baseDir = $this->config['paths']['encrypted'];
         $this->ensureDir($baseDir);

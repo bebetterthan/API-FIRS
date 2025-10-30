@@ -155,7 +155,7 @@ class Router {
 
             $fileManager = new FileManager($this->config);
 
-            // Save JSON with signedIRN (includes timestamp) as filename
+            // Save JSON with IRN as filename (no timestamp - will auto-replace if exists)
             $stepStart = microtime(true);
             $jsonFile = $fileManager->saveInvoiceJSON($signedIRN, $body);
             $timings['save_json'] = round((microtime(true) - $stepStart) * 1000, 2);
@@ -167,7 +167,7 @@ class Router {
             $encryptedData = $crypto->encryptIRN($irn, $signedIRN);
             $timings['encryption'] = round((microtime(true) - $stepStart) * 1000, 2);
 
-            // Save Base64 encrypted data with signedIRN as filename
+            // Save Base64 encrypted data with IRN as filename (no timestamp - will auto-replace if exists)
             $stepStart = microtime(true);
             $encryptedFile = $fileManager->saveEncryptedData($irn, $signedIRN, $encryptedData, $savedInvoiceData);
             $timings['save_base64'] = round((microtime(true) - $stepStart) * 1000, 2);
@@ -176,7 +176,7 @@ class Router {
 
             $stepStart = microtime(true);
             $qrGenerator = new QRGenerator($this->config);
-            // Generate QR with signedIRN as filename
+            // Generate QR with IRN as filename (no timestamp - will auto-replace if exists)
             $qrFile = $qrGenerator->generate($base64DataFromFile, $signedIRN);
             $timings['qr_generation'] = round((microtime(true) - $stepStart) * 1000, 2);
 

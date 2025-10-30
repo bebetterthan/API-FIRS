@@ -41,7 +41,7 @@ class QRGenerator {
 
     public function generate(string $encryptedData, string $signedIRN): string {
         $irnProcessor = new IRNProcessor($this->config);
-        // Use signedIRN (includes timestamp) for filename
+        // Use IRN for filename (no timestamp - will auto-replace if exists)
         $sanitizedIRN = $irnProcessor->sanitizeForFilename($signedIRN);
         $baseDir = $this->config['paths']['qrcodes'];
         $this->ensureDir($baseDir);
