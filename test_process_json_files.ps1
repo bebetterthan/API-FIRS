@@ -4,6 +4,9 @@
 # Same flow as /api/v1/invoice/sign but for batch processing
 ################################################################################
 
+# Force TLS 1.2 for Windows Server / PowerShell 4 compatibility
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # Configuration (same as main API)
 $JSON_DIR = if ($env:JSON_DIR) { $env:JSON_DIR } else { "C:\www\wwwroot\sftp\user_data" }
 $OUTPUT_BASE = if ($env:OUTPUT_BASE) { $env:OUTPUT_BASE } else { "C:\www\wwwroot\sftp\user_data" }
@@ -35,7 +38,8 @@ Write-Host "  Mode:           $PROCESS_MODE"
 Write-Host "  JSON Directory: $JSON_DIR"
 Write-Host "  Output Base:    $OUTPUT_BASE"
 Write-Host "  Base URL:       $BASE_URL"
-Write-Host "  API Key:        $($X_API_KEY.Substring(0, [Math]::Min(20, $X_API_KEY.Length)))..."
+$apiKeyPreview = $X_API_KEY.Substring(0, [Math]::Min(20, $X_API_KEY.Length)) + "..."
+Write-Host "  API Key:        $apiKeyPreview"
 Write-Host "  Success Log:    $SUCCESS_LOG"
 Write-Host "  Error Log:      $ERROR_LOG"
 Write-Host ""
@@ -57,18 +61,18 @@ function Write-SuccessLog {
         [string]$TotalAmount = "N/A",
         [string]$Currency = "N/A"
     )
-    
+
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    
+
     # Get file sizes
     $jsonSize = if (Test-Path $JSONFile) { (Get-Item $JSONFile).Length } else { 0 }
     $base64Size = if (Test-Path $Base64File) { (Get-Item $Base64File).Length } else { 0 }
     $qrSize = if (Test-Path $QRFile) { (Get-Item $QRFile).Length } else { 0 }
-    
+
     $jsonSizeKB = [Math]::Round($jsonSize / 1024, 2)
     $base64SizeKB = [Math]::Round($base64Size / 1024, 2)
     $qrSizeKB = [Math]::Round($qrSize / 1024, 2)
-    
+
     $logEntry = @{
         timestamp = $timestamp
         type = "SUCCESS"
@@ -105,7 +109,7 @@ function Write-SuccessLog {
             http_code = $HTTPCode
         }
     } | ConvertTo-Json -Compress -Depth 10
-    
+
     Add-Content -Path $SUCCESS_LOG -Value $logEntry
 }
 
@@ -120,9 +124,9 @@ function Write-ErrorLog {
         [string]$Customer = "N/A",
         [string]$TotalAmount = "N/A"
     )
-    
+
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    
+
     # Limit error message length
     if ($ErrorMessage.Length -gt 500) {
         $ErrorMessage = $ErrorMessage.Substring(0, 500)
@@ -130,7 +134,7 @@ function Write-ErrorLog {
     if ($ErrorDetails.Length -gt 500) {
         $ErrorDetails = $ErrorDetails.Substring(0, 500)
     }
-    
+
     $logEntry = @{
         timestamp = $timestamp
         type = "ERROR"
@@ -145,7 +149,7 @@ function Write-ErrorLog {
             total_amount = $TotalAmount
         }
     } | ConvertTo-Json -Compress -Depth 10
-    
+
     Add-Content -Path $ERROR_LOG -Value $logEntry
 }
 
@@ -217,7 +221,8 @@ Write-Host ""
 ################################################################################
 # Step 4: Process JSON Files (Pipeline Mode)
 ################################################################################
-Write-Host "[Step 4/5] Processing JSON Files ($PROCESS_MODE mode)..." -ForegroundColor Cyan
+$stepMessage = "[Step 4/5] Processing JSON Files (" + $PROCESS_MODE + " mode)..."
+Write-Host $stepMessage -ForegroundColor Cyan
 Write-Host ""
 
 $PROCESSED = 0
@@ -284,7 +289,8 @@ foreach ($jsonFileItem in $jsonFiles) {
 
     # Step 1: Read JSON content
     Write-Host "  [1/3] Reading JSON content..."
-    Write-Host "  ✓ JSON file readable ($FILESIZE bytes)" -ForegroundColor Green
+    $readableMsg = "  ✓ JSON file readable (" + $FILESIZE + " bytes)"
+    Write-Host $readableMsg -ForegroundColor Green
 
     # Step 2: Call API to encrypt and generate QR
     Write-Host "  [2/3] Calling API POST /api/v1/invoice/sign..."
@@ -334,7 +340,7 @@ foreach ($jsonFileItem in $jsonFiles) {
             $responseObj = $RESPONSE_BODY | ConvertFrom-Json -ErrorAction SilentlyContinue
             $ERROR_MESSAGE = if ($responseObj.error.message) { $responseObj.error.message } else { "Unknown error" }
             $ERROR_DETAILS = if ($responseObj.error.details) { $responseObj.error.details } else { "N/A" }
-            
+
             if ($ERROR_DETAILS -match "duplicate|already exists|unable to complete") {
                 $IS_DUPLICATE = $true
             }
@@ -348,7 +354,7 @@ foreach ($jsonFileItem in $jsonFiles) {
 
         if ($IS_DUPLICATE) {
             Write-Host "  ⚠ Duplicate IRN (already validated by FIRS)" -ForegroundColor Yellow
-            
+
             # Log as error (duplicate)
             Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage "Duplicate IRN - already exists" -ErrorDetails $ERROR_DETAILS -ErrorType "duplicate" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
 
@@ -379,7 +385,7 @@ foreach ($jsonFileItem in $jsonFiles) {
             }
         } else {
             Write-Host "  ✗ API call failed (HTTP $HTTP_CODE)" -ForegroundColor Red
-            
+
             if ($ERROR_MESSAGE.Length -gt 200) {
                 $ERROR_MESSAGE = $ERROR_MESSAGE.Substring(0, 200) + "..."
             }
@@ -481,7 +487,7 @@ echo base64_encode(`$encrypted);
     # File paths: Base64 and QR without timestamp (will replace if exists)
     $BASE64_PATH = Join-Path $BASE64_DIR "$IRN.txt"
     $QR_PATH = Join-Path $QR_DIR "$IRN.png"
-    
+
     # Check if files already exist
     if ((Test-Path $BASE64_PATH) -or (Test-Path $QR_PATH)) {
         Write-Host "    ⚠ Files with IRN $IRN already exist" -ForegroundColor Yellow
@@ -493,7 +499,8 @@ echo base64_encode(`$encrypted);
         Set-Content -Path $BASE64_PATH -Value $ENCRYPTED_DATA -NoNewline
         if (Test-Path $BASE64_PATH) {
             $B64_SIZE = (Get-Item $BASE64_PATH).Length
-            Write-Host "    ✓ Base64: $IRN.txt ($B64_SIZE bytes)" -ForegroundColor Green
+            $b64Msg = "    ✓ Base64: " + $IRN + ".txt (" + $B64_SIZE + " bytes)"
+            Write-Host $b64Msg -ForegroundColor Green
             $FILES_CREATED++
         } else {
             Write-Host "    ✗ Failed to save Base64 file" -ForegroundColor Red
@@ -529,7 +536,8 @@ try {
         if ($QR_RESULT -eq "SUCCESS" -and (Test-Path $QR_PATH)) {
             $QR_SIZE = (Get-Item $QR_PATH).Length
             $QR_SIZE_KB = [Math]::Round($QR_SIZE / 1024, 1)
-            Write-Host "    ✓ QR PNG: $IRN.png ($QR_SIZE_KB KB)" -ForegroundColor Green
+            $qrMsg = "    ✓ QR PNG: " + $IRN + ".png (" + $QR_SIZE_KB + " KB)"
+            Write-Host $qrMsg -ForegroundColor Green
             $FILES_CREATED++
         } else {
             Write-Host "    ✗ Failed to generate QR code" -ForegroundColor Red
@@ -550,10 +558,10 @@ try {
     if ($FILES_CREATED -eq 3) {
         Write-Host "Pipeline completed successfully!" -ForegroundColor Green
         $SUCCESS++
-        
+
         # Save JSON signed without timestamp (same as Base64/QR - will auto-replace)
         $JSON_SIGNED_FILE = Join-Path $JSON_SIGNED_DIR "$IRN.json"
-        
+
         Write-Host "    → Saving JSON signed..." -ForegroundColor Cyan
         try {
             Copy-Item -Path $JSON_FILE -Destination $JSON_SIGNED_FILE -Force
@@ -561,10 +569,10 @@ try {
         } catch {
             Write-Host "    ⚠ Failed to save JSON signed" -ForegroundColor Yellow
         }
-        
+
         # Log success with detailed information (use IRN for both parameters since no timestamp)
         Write-SuccessLog -IRN $IRN -IRNSigned $IRN -JSONFile $JSON_SIGNED_FILE -Base64File $BASE64_PATH -QRFile $QR_PATH -HTTPCode $HTTP_CODE -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -Currency $CURRENCY
-        
+
         # Delete original JSON file after successful processing
         Write-Host "    → Deleting source JSON file..." -ForegroundColor Cyan
         try {
@@ -575,10 +583,10 @@ try {
         }
     } else {
         Write-Host "Pipeline completed with missing files ($FILES_CREATED/3)" -ForegroundColor Yellow
-        
+
         # Log error for incomplete processing
         Write-ErrorLog -IRN $IRN -HTTPCode "0" -ErrorMessage "Incomplete file generation" -ErrorDetails "Only $FILES_CREATED/3 files created" -ErrorType "processing_error" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
-        
+
         $ERRORS++
     }
 
