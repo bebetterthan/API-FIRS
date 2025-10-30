@@ -46,7 +46,6 @@ class LogManager {
             'currency' => $invoiceData['document_currency_code'] ?? 'NGN',
             'http_code' => $apiResponse['http_code'] ?? 200,
             'files' => implode(',', array_map(fn($f) => basename($f), $files)), // json.txt,encrypted.txt,qr.png
-            'process_time' => isset($timings['total']) ? round($timings['total'], 2) . 'ms' : null,
         ];
 
         $this->writeLog($this->successLogFile, $logEntry);
