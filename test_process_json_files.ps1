@@ -162,22 +162,24 @@ Write-Host "[Step 1/5] Checking Prerequisites..." -ForegroundColor Cyan
 try {
     $phpVersion = php -v 2>&1 | Select-Object -First 1
     if ($phpVersion -match "PHP (\d+\.\d+\.\d+)") {
-        Write-Host "  ✓ PHP $($matches[1])" -ForegroundColor Green
+        $phpVer = $matches[1]
+        $phpMsg = "  [OK] PHP " + $phpVer
+        Write-Host $phpMsg -ForegroundColor Green
     } else {
-        Write-Host "  ✗ PHP version not detected" -ForegroundColor Red
+        Write-Host "  [X] PHP version not detected" -ForegroundColor Red
         exit 1
     }
 } catch {
-    Write-Host "  ✗ PHP not found" -ForegroundColor Red
+    Write-Host "  [X] PHP not found" -ForegroundColor Red
     exit 1
 }
 
 # Check curl
 try {
     $null = curl.exe --version 2>&1 | Select-Object -First 1
-    Write-Host "  ✓ curl installed" -ForegroundColor Green
+    Write-Host "  [OK] curl installed" -ForegroundColor Green
 } catch {
-    Write-Host "  ✗ curl not found" -ForegroundColor Red
+    Write-Host "  [X] curl not found" -ForegroundColor Red
     exit 1
 }
 
@@ -189,25 +191,25 @@ Write-Host ""
 Write-Host "[Step 2/5] Checking JSON Directory..." -ForegroundColor Cyan
 
 if (-not (Test-Path $JSON_DIR)) {
-    Write-Host "✗ Directory not found: $JSON_DIR" -ForegroundColor Red
+    Write-Host "[X] Directory not found: $JSON_DIR" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "  ✓ Directory exists" -ForegroundColor Green
+Write-Host "  [OK] Directory exists" -ForegroundColor Green
 
 # Count JSON files
 $jsonFiles = Get-ChildItem -Path $JSON_DIR -Filter "*.json" -File -ErrorAction SilentlyContinue
 $JSON_COUNT = $jsonFiles.Count
 
 if ($JSON_COUNT -eq 0) {
-    Write-Host "  ⚠ No JSON files found" -ForegroundColor Yellow
+    Write-Host "  [!] No JSON files found" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  To create test data, run:"
     Write-Host "    .\test_linux_production.ps1"
     exit 0
 }
 
-Write-Host "  ✓ Found $JSON_COUNT JSON file(s)" -ForegroundColor Green
+Write-Host "  [OK] Found $JSON_COUNT JSON file(s)" -ForegroundColor Green
 Write-Host ""
 
 ################################################################################
@@ -215,7 +217,7 @@ Write-Host ""
 ################################################################################
 Write-Host "[Step 3/5] Testing API Connection..." -ForegroundColor Cyan
 Write-Host "  Endpoint: $BASE_URL/api/v1/invoice/sign"
-Write-Host "  ✓ Ready to process invoices" -ForegroundColor Green
+Write-Host "  [OK] Ready to process invoices" -ForegroundColor Green
 Write-Host ""
 
 ################################################################################
@@ -235,7 +237,7 @@ foreach ($jsonFileItem in $jsonFiles) {
     $FILENAME = $jsonFileItem.Name
     $FILESIZE = $jsonFileItem.Length
 
-    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Blue
+    Write-Host "======================================================" -ForegroundColor Blue
     Write-Host "File: " -NoNewline -ForegroundColor Cyan
     Write-Host $FILENAME
     Write-Host "Size: " -NoNewline -ForegroundColor Cyan
@@ -246,9 +248,9 @@ foreach ($jsonFileItem in $jsonFiles) {
     try {
         $jsonContent = Get-Content -Path $JSON_FILE -Raw -ErrorAction Stop
         $jsonObject = $jsonContent | ConvertFrom-Json -ErrorAction Stop
-        Write-Host "✓ Valid JSON syntax" -ForegroundColor Green
+        Write-Host "[OK] Valid JSON syntax" -ForegroundColor Green
     } catch {
-        Write-Host "✗ Invalid JSON syntax" -ForegroundColor Red
+        Write-Host "[X] Invalid JSON syntax" -ForegroundColor Red
         $ERRORS++
         Write-Host ""
         continue
@@ -289,7 +291,7 @@ foreach ($jsonFileItem in $jsonFiles) {
 
     # Step 1: Read JSON content
     Write-Host "  [1/3] Reading JSON content..."
-    $readableMsg = "  ✓ JSON file readable (" + $FILESIZE + " bytes)"
+    $readableMsg = "  [OK] JSON file readable (" + $FILESIZE + " bytes)"
     Write-Host $readableMsg -ForegroundColor Green
 
     # Step 2: Call API to encrypt and generate QR
@@ -353,7 +355,7 @@ foreach ($jsonFileItem in $jsonFiles) {
         }
 
         if ($IS_DUPLICATE) {
-            Write-Host "  ⚠ Duplicate IRN (already validated by FIRS)" -ForegroundColor Yellow
+            Write-Host "  [!] Duplicate IRN (already validated by FIRS)" -ForegroundColor Yellow
 
             # Log as error (duplicate)
             Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage "Duplicate IRN - already exists" -ErrorDetails $ERROR_DETAILS -ErrorType "duplicate" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
@@ -366,25 +368,27 @@ foreach ($jsonFileItem in $jsonFiles) {
             $EXISTING_QR = Get-ChildItem -Path $QR_DIR -Filter "$IRN.*.png" -ErrorAction SilentlyContinue | Select-Object -First 1
 
             if ($EXISTING_BASE64 -and $EXISTING_QR) {
-                Write-Host "  ✓ Base64 file exists: $($EXISTING_BASE64.Name)" -ForegroundColor Green
-                Write-Host "  ✓ QR code exists: $($EXISTING_QR.Name)" -ForegroundColor Green
-                Write-Host "  → Skipping: All files already generated" -ForegroundColor Cyan
+                $base64Name = $EXISTING_BASE64.Name
+                $qrName = $EXISTING_QR.Name
+                Write-Host "  [OK] Base64 file exists: $base64Name" -ForegroundColor Green
+                Write-Host "  [OK] QR code exists: $qrName" -ForegroundColor Green
+                Write-Host "  -> Skipping: All files already generated" -ForegroundColor Cyan
                 $SKIPPED++
                 $PROCESSED++
                 Write-Host ""
                 continue
             } else {
                 if (-not $EXISTING_BASE64) {
-                    Write-Host "  ✗ Base64 file not found" -ForegroundColor Yellow
+                    Write-Host "  [X] Base64 file not found" -ForegroundColor Yellow
                 }
                 if (-not $EXISTING_QR) {
-                    Write-Host "  ✗ QR code not found" -ForegroundColor Yellow
+                    Write-Host "  [X] QR code not found" -ForegroundColor Yellow
                 }
-                Write-Host "  → Generating missing files..." -ForegroundColor Cyan
+                Write-Host "  -> Generating missing files..." -ForegroundColor Cyan
                 $DATA_OK = $true
             }
         } else {
-            Write-Host "  ✗ API call failed (HTTP $HTTP_CODE)" -ForegroundColor Red
+            Write-Host "  [X] API call failed (HTTP $HTTP_CODE)" -ForegroundColor Red
 
             if ($ERROR_MESSAGE.Length -gt 200) {
                 $ERROR_MESSAGE = $ERROR_MESSAGE.Substring(0, 200) + "..."
@@ -399,7 +403,7 @@ foreach ($jsonFileItem in $jsonFiles) {
             continue
         }
     } else {
-        Write-Host "  ✓ API call successful (HTTP $HTTP_CODE)" -ForegroundColor Green
+        Write-Host "  [OK] API call successful (HTTP $HTTP_CODE)" -ForegroundColor Green
         Write-Host "    Response time: ${DURATION}ms"
         $DATA_OK = $true
     }
@@ -410,7 +414,7 @@ foreach ($jsonFileItem in $jsonFiles) {
     $FILES_CREATED = 0
 
     if ($DATA_OK) {
-        Write-Host "    ✓ FIRS validation confirmed" -ForegroundColor Green
+        Write-Host "    [OK] FIRS validation confirmed" -ForegroundColor Green
         Write-Host "    Encrypting with crypto_keys..."
 
         # No timestamp needed - all files use IRN only
@@ -418,7 +422,7 @@ foreach ($jsonFileItem in $jsonFiles) {
         # Encrypt using PHP
         $CRYPTO_KEYS_FILE = ".\storage\crypto_keys.txt"
         if (-not (Test-Path $CRYPTO_KEYS_FILE)) {
-            Write-Host "    ✗ crypto_keys.txt not found" -ForegroundColor Red
+            Write-Host "    [X] crypto_keys.txt not found" -ForegroundColor Red
             $ERRORS++
             Write-Host ""
             continue
@@ -451,17 +455,19 @@ echo base64_encode(`$encrypted);
         $ENCRYPTED_DATA = php -r $phpScript 2>&1
 
         if ($ENCRYPTED_DATA -match "^ERROR:" -or -not $ENCRYPTED_DATA) {
-            Write-Host "    ✗ Encryption failed: $ENCRYPTED_DATA" -ForegroundColor Red
+            Write-Host "    [X] Encryption failed: $ENCRYPTED_DATA" -ForegroundColor Red
             $ERRORS++
             Write-Host ""
             continue
         }
 
-        Write-Host "    ✓ Encrypted with crypto_keys ($($ENCRYPTED_DATA.Length) bytes base64)" -ForegroundColor Green
+        $encLen = $ENCRYPTED_DATA.Length
+        $encMsg = "    [OK] Encrypted with crypto_keys (" + $encLen + " bytes base64)"
+        Write-Host $encMsg -ForegroundColor Green
     }
 
     if (-not $IRN) {
-        Write-Host "    ✗ Cannot extract IRN" -ForegroundColor Red
+        Write-Host "    [X] Cannot extract IRN" -ForegroundColor Red
         $ERRORS++
         Write-Host ""
         continue
@@ -490,8 +496,8 @@ echo base64_encode(`$encrypted);
 
     # Check if files already exist
     if ((Test-Path $BASE64_PATH) -or (Test-Path $QR_PATH)) {
-        Write-Host "    ⚠ Files with IRN $IRN already exist" -ForegroundColor Yellow
-        Write-Host "    → Will replace existing files with new generation" -ForegroundColor Cyan
+        Write-Host "    [!] Files with IRN $IRN already exist" -ForegroundColor Yellow
+        Write-Host "    -> Will replace existing files with new generation" -ForegroundColor Cyan
     }
 
     # Save Base64 encrypted data
@@ -499,14 +505,14 @@ echo base64_encode(`$encrypted);
         Set-Content -Path $BASE64_PATH -Value $ENCRYPTED_DATA -NoNewline
         if (Test-Path $BASE64_PATH) {
             $B64_SIZE = (Get-Item $BASE64_PATH).Length
-            $b64Msg = "    ✓ Base64: " + $IRN + ".txt (" + $B64_SIZE + " bytes)"
+            $b64Msg = "    [OK] Base64: " + $IRN + ".txt (" + $B64_SIZE + " bytes)"
             Write-Host $b64Msg -ForegroundColor Green
             $FILES_CREATED++
         } else {
-            Write-Host "    ✗ Failed to save Base64 file" -ForegroundColor Red
+            Write-Host "    [X] Failed to save Base64 file" -ForegroundColor Red
         }
     } else {
-        Write-Host "    ✗ No encrypted data in response" -ForegroundColor Red
+        Write-Host "    [X] No encrypted data in response" -ForegroundColor Red
     }
 
     # Generate QR code from Base64 data using PHP
@@ -536,22 +542,22 @@ try {
         if ($QR_RESULT -eq "SUCCESS" -and (Test-Path $QR_PATH)) {
             $QR_SIZE = (Get-Item $QR_PATH).Length
             $QR_SIZE_KB = [Math]::Round($QR_SIZE / 1024, 1)
-            $qrMsg = "    ✓ QR PNG: " + $IRN + ".png (" + $QR_SIZE_KB + " KB)"
+            $qrMsg = "    [OK] QR PNG: " + $IRN + ".png (" + $QR_SIZE_KB + " KB)"
             Write-Host $qrMsg -ForegroundColor Green
             $FILES_CREATED++
         } else {
-            Write-Host "    ✗ Failed to generate QR code" -ForegroundColor Red
+            Write-Host "    [X] Failed to generate QR code" -ForegroundColor Red
             if ($QR_RESULT -ne "SUCCESS") {
                 Write-Host "      Error: $QR_RESULT" -ForegroundColor Red
             }
         }
     } else {
-        Write-Host "    ✗ Cannot generate QR (missing data or PHP)" -ForegroundColor Red
+        Write-Host "    [X] Cannot generate QR (missing data or PHP)" -ForegroundColor Red
     }
 
     # JSON file already exists in source directory
     if (Test-Path $JSON_FILE) {
-        Write-Host "    ✓ JSON:   $FILENAME" -ForegroundColor Green
+        Write-Host "    [OK] JSON:   $FILENAME" -ForegroundColor Green
         $FILES_CREATED++
     }
 
@@ -562,24 +568,24 @@ try {
         # Save JSON signed without timestamp (same as Base64/QR - will auto-replace)
         $JSON_SIGNED_FILE = Join-Path $JSON_SIGNED_DIR "$IRN.json"
 
-        Write-Host "    → Saving JSON signed..." -ForegroundColor Cyan
+        Write-Host "    -> Saving JSON signed..." -ForegroundColor Cyan
         try {
             Copy-Item -Path $JSON_FILE -Destination $JSON_SIGNED_FILE -Force
-            Write-Host "    ✓ JSON signed saved: $IRN.json" -ForegroundColor Green
+            Write-Host "    [OK] JSON signed saved: $IRN.json" -ForegroundColor Green
         } catch {
-            Write-Host "    ⚠ Failed to save JSON signed" -ForegroundColor Yellow
+            Write-Host "    [!] Failed to save JSON signed" -ForegroundColor Yellow
         }
 
         # Log success with detailed information (use IRN for both parameters since no timestamp)
         Write-SuccessLog -IRN $IRN -IRNSigned $IRN -JSONFile $JSON_SIGNED_FILE -Base64File $BASE64_PATH -QRFile $QR_PATH -HTTPCode $HTTP_CODE -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -Currency $CURRENCY
 
         # Delete original JSON file after successful processing
-        Write-Host "    → Deleting source JSON file..." -ForegroundColor Cyan
+        Write-Host "    -> Deleting source JSON file..." -ForegroundColor Cyan
         try {
             Remove-Item -Path $JSON_FILE -Force
-            Write-Host "    ✓ Source JSON deleted: $FILENAME" -ForegroundColor Green
+            Write-Host "    [OK] Source JSON deleted: $FILENAME" -ForegroundColor Green
         } catch {
-            Write-Host "    ⚠ Failed to delete source JSON" -ForegroundColor Yellow
+            Write-Host "    [!] Failed to delete source JSON" -ForegroundColor Yellow
         }
     } else {
         Write-Host "Pipeline completed with missing files ($FILES_CREATED/3)" -ForegroundColor Yellow
@@ -600,18 +606,18 @@ try {
 Write-Host ""
 Write-Host "[Step 5/5] Processing Summary" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Blue
+Write-Host "======================================================" -ForegroundColor Blue
 Write-Host ""
 
 if ($PROCESS_MODE -eq "pipeline") {
     if ($ERRORS -eq 0 -and $SUCCESS -eq $PROCESSED) {
-        Write-Host "✓ All files processed successfully through pipeline" -ForegroundColor Green
+        Write-Host "[OK] All files processed successfully through pipeline" -ForegroundColor Green
     } else {
-        Write-Host "⚠ Some files had errors during pipeline processing" -ForegroundColor Yellow
+        Write-Host "[!] Some files had errors during pipeline processing" -ForegroundColor Yellow
     }
 
     Write-Host ""
-    Write-Host "  Mode:              Pipeline (JSON → Base64 → QR)"
+    Write-Host "  Mode:              Pipeline (JSON -> Base64 -> QR)"
     Write-Host "  Total JSON files:  $JSON_COUNT"
     Write-Host "  Processed:         $PROCESSED"
     Write-Host "  Success:           $SUCCESS"
