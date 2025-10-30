@@ -208,11 +208,7 @@ class Router {
                             'qr_code' => $qrFile,
                         ], 
                         $firsResponse,
-                        $body, // Invoice data for details
-                        [
-                            'total_time_ms' => $totalTime,
-                            'breakdown' => $timings,
-                        ]
+                        $body // Invoice data for details
                     );
                     
                     error_log(sprintf('[FIRS API SUCCESS] Invoice %s submitted successfully', $irn));
@@ -255,11 +251,7 @@ class Router {
                         'qr_code' => $qrFile,
                     ], 
                     ['status' => 'disabled', 'message' => 'FIRS API integration disabled'],
-                    $body,
-                    [
-                        'total_time_ms' => $totalTime,
-                        'breakdown' => $timings,
-                    ]
+                    $body
                 );
             }
 

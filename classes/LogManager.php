@@ -178,10 +178,10 @@ class LogManager {
     /**
      * Get log statistics
      * 
-     * @param string $date Date in Y-m-d format (default: today)
+     * @param string|null $date Date in Y-m-d format (default: today)
      * @return array Statistics for success and error logs
      */
-    public function getStatistics(string $date = null): array {
+    public function getStatistics(?string $date = null): array {
         if (!$date) {
             $date = date('Y-m-d');
         }
