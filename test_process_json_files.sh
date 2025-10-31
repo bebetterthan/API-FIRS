@@ -56,8 +56,107 @@ echo "  Error Log:      ${ERROR_LOG}"
 echo ""
 
 ################################################################################
+# Database Configuration
+################################################################################
+
+# Load database configuration from .env file
+DB_ENABLED=false
+DB_DRIVER=""
+DB_HOST=""
+DB_PORT="1433"
+DB_DATABASE=""
+DB_USERNAME=""
+DB_PASSWORD=""
+
+if [ -f ".env" ]; then
+    while IFS='=' read -r key value; do
+        # Remove leading/trailing whitespace
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        
+        case "$key" in
+            DB_LOGGING_ENABLED)
+                if [ "$value" = "true" ]; then
+                    DB_ENABLED=true
+                fi
+                ;;
+            DB_DRIVER) DB_DRIVER="$value" ;;
+            DB_HOST) DB_HOST="$value" ;;
+            DB_PORT) DB_PORT="$value" ;;
+            DB_DATABASE) DB_DATABASE="$value" ;;
+            DB_USERNAME) DB_USERNAME="$value" ;;
+            DB_PASSWORD) DB_PASSWORD="$value" ;;
+        esac
+    done < .env
+fi
+
+################################################################################
 # Log Functions
 ################################################################################
+
+# Log to database (simplified structure)
+log_to_database() {
+    local log_type="$1"
+    local timestamp="$2"
+    local irn="$3"
+    local status="$4"
+    local http_code="$5"
+    local error_type="$6"
+    local error_message="$7"
+    local error_details="$8"
+    
+    if [ "$DB_ENABLED" != "true" ]; then
+        return
+    fi
+    
+    # Create temporary PHP script for database logging
+    local php_script=$(cat <<'PHPSCRIPT'
+<?php
+$type = $argv[1];
+$timestamp = $argv[2];
+$irn = $argv[3];
+$status = $argv[4] ?? null;
+$http_code = $argv[5] ?? null;
+$error_type = $argv[6] ?? null;
+$error_message = $argv[7] ?? null;
+$error_details = $argv[8] ?? null;
+
+$host = getenv('DB_HOST');
+$port = getenv('DB_PORT');
+$database = getenv('DB_DATABASE');
+$username = getenv('DB_USERNAME');
+$password = getenv('DB_PASSWORD');
+
+try {
+    $dsn = "odbc:Driver={SQL Server};Server=$host,$port;Database=$database";
+    $pdo = new PDO($dsn, $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    
+    if ($type === 'success') {
+        $stmt = $pdo->prepare("INSERT INTO firs_success_logs (timestamp, irn, status) VALUES (?, ?, ?)");
+        $stmt->execute([$timestamp, $irn, $status]);
+    } elseif ($type === 'error') {
+        $stmt = $pdo->prepare("INSERT INTO firs_error_logs (timestamp, irn, http_code, error_type, error_message, error_details) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $timestamp,
+            $irn ?: null,
+            $http_code ?: null,
+            $error_type ?: null,
+            $error_message ?: null,
+            $error_details ?: null
+        ]);
+    }
+} catch (Exception $e) {
+    // Silently fail, don't interrupt main process
+    error_log("Database logging failed: " . $e->getMessage());
+}
+PHPSCRIPT
+)
+    
+    # Export environment variables and run PHP script
+    export DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD
+    echo "$php_script" | php -- "$log_type" "$timestamp" "$irn" "$status" "$http_code" "$error_type" "$error_message" "$error_details" 2>/dev/null
+}
 
 # Log success to JSON format
 log_success() {
@@ -98,6 +197,9 @@ log_success() {
 EOF
 )
     echo "$log_entry" >> "$SUCCESS_LOG"
+    
+    # Log to database
+    log_to_database "success" "$timestamp" "$irn" "SUCCESS" "" "" "" ""
 }
 
 # Log error to JSON format
@@ -121,6 +223,9 @@ log_error() {
 EOF
 )
     echo "$log_entry" >> "$ERROR_LOG"
+    
+    # Log to database
+    log_to_database "error" "$timestamp" "$irn" "" "$http_code" "$error_type" "$error_message" "$error_details"
 }
 
 ################################################################################

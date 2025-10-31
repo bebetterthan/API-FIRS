@@ -45,8 +45,104 @@ Write-Host "  Error Log:      $ERROR_LOG"
 Write-Host ""
 
 ################################################################################
+# Database Configuration
+################################################################################
+
+# Load database configuration from .env file
+$DB_CONFIG = @{
+    enabled = $false
+    driver = ""
+    host = ""
+    port = "1433"
+    database = ""
+    username = ""
+    password = ""
+}
+
+# Read .env file if exists
+if (Test-Path ".env") {
+    Get-Content ".env" | ForEach-Object {
+        if ($_ -match '^\s*DB_LOGGING_ENABLED\s*=\s*(.+)$') {
+            $DB_CONFIG.enabled = $matches[1].Trim() -eq "true"
+        }
+        if ($_ -match '^\s*DB_DRIVER\s*=\s*(.+)$') {
+            $DB_CONFIG.driver = $matches[1].Trim()
+        }
+        if ($_ -match '^\s*DB_HOST\s*=\s*(.+)$') {
+            $DB_CONFIG.host = $matches[1].Trim()
+        }
+        if ($_ -match '^\s*DB_PORT\s*=\s*(.+)$') {
+            $DB_CONFIG.port = $matches[1].Trim()
+        }
+        if ($_ -match '^\s*DB_DATABASE\s*=\s*(.+)$') {
+            $DB_CONFIG.database = $matches[1].Trim()
+        }
+        if ($_ -match '^\s*DB_USERNAME\s*=\s*(.+)$') {
+            $DB_CONFIG.username = $matches[1].Trim()
+        }
+        if ($_ -match '^\s*DB_PASSWORD\s*=\s*(.+)$') {
+            $DB_CONFIG.password = $matches[1].Trim()
+        }
+    }
+}
+
+################################################################################
 # Log Functions
 ################################################################################
+
+function Write-DatabaseLog {
+    param(
+        [string]$Type,
+        [string]$Timestamp,
+        [string]$IRN,
+        [string]$Status = "",
+        [string]$HTTPCode = "",
+        [string]$ErrorType = "",
+        [string]$ErrorMessage = "",
+        [string]$ErrorDetails = ""
+    )
+    
+    if (-not $DB_CONFIG.enabled) {
+        return
+    }
+    
+    try {
+        # Build connection string for ODBC
+        $connectionString = "Driver={SQL Server};Server=$($DB_CONFIG.host),$($DB_CONFIG.port);Database=$($DB_CONFIG.database);Uid=$($DB_CONFIG.username);Pwd=$($DB_CONFIG.password);"
+        
+        # Create connection
+        $connection = New-Object System.Data.Odbc.OdbcConnection($connectionString)
+        $connection.Open()
+        
+        if ($Type -eq "success") {
+            # Insert success log
+            $query = "INSERT INTO firs_success_logs (timestamp, irn, status) VALUES (?, ?, ?)"
+            $command = New-Object System.Data.Odbc.OdbcCommand($query, $connection)
+            $command.Parameters.Add("@timestamp", [System.Data.Odbc.OdbcType]::DateTime).Value = [DateTime]::ParseExact($Timestamp, "yyyy-MM-dd HH:mm:ss", $null)
+            $command.Parameters.Add("@irn", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = $IRN
+            $command.Parameters.Add("@status", [System.Data.Odbc.OdbcType]::VarChar, 50).Value = $Status
+            $command.ExecuteNonQuery() | Out-Null
+        }
+        elseif ($Type -eq "error") {
+            # Insert error log
+            $query = "INSERT INTO firs_error_logs (timestamp, irn, http_code, error_type, error_message, error_details) VALUES (?, ?, ?, ?, ?, ?)"
+            $command = New-Object System.Data.Odbc.OdbcCommand($query, $connection)
+            $command.Parameters.Add("@timestamp", [System.Data.Odbc.OdbcType]::DateTime).Value = [DateTime]::ParseExact($Timestamp, "yyyy-MM-dd HH:mm:ss", $null)
+            $command.Parameters.Add("@irn", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($IRN) { $IRN } else { [DBNull]::Value }
+            $command.Parameters.Add("@http_code", [System.Data.Odbc.OdbcType]::Int).Value = if ($HTTPCode) { [int]$HTTPCode } else { [DBNull]::Value }
+            $command.Parameters.Add("@error_type", [System.Data.Odbc.OdbcType]::VarChar, 100).Value = if ($ErrorType) { $ErrorType } else { [DBNull]::Value }
+            $command.Parameters.Add("@error_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($ErrorMessage) { $ErrorMessage } else { [DBNull]::Value }
+            $command.Parameters.Add("@error_details", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($ErrorDetails) { $ErrorDetails } else { [DBNull]::Value }
+            $command.ExecuteNonQuery() | Out-Null
+        }
+        
+        $connection.Close()
+    }
+    catch {
+        # Silently fail database logging, don't interrupt the main process
+        Write-Host "  [Warning] Database logging failed: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
 
 function Write-SuccessLog {
     param(
@@ -111,6 +207,9 @@ function Write-SuccessLog {
     } | ConvertTo-Json -Compress -Depth 10
 
     Add-Content -Path $SUCCESS_LOG -Value $logEntry
+    
+    # Log to database (simplified structure)
+    Write-DatabaseLog -Type "success" -Timestamp $timestamp -IRN $IRN -Status "SUCCESS"
 }
 
 function Write-ErrorLog {
@@ -151,6 +250,9 @@ function Write-ErrorLog {
     } | ConvertTo-Json -Compress -Depth 10
 
     Add-Content -Path $ERROR_LOG -Value $logEntry
+    
+    # Log to database (simplified structure)
+    Write-DatabaseLog -Type "error" -Timestamp $timestamp -IRN $IRN -HTTPCode $HTTPCode -ErrorType $ErrorType -ErrorMessage $ErrorMessage -ErrorDetails $ErrorDetails
 }
 
 ################################################################################

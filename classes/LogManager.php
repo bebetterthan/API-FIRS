@@ -4,21 +4,35 @@ namespace FIRS;
 /**
  * LogManager - Handles structured logging for API responses
  * Logs success and error details from FIRS API calls
+ * Supports dual logging: file-based and database
  */
 class LogManager {
     private $config;
     private $successLogFile;
     private $errorLogFile;
+    private $databaseLogger;
+    private $dbLoggingEnabled;
 
     public function __construct($config) {
         $this->config = $config;
         $this->successLogFile = $this->config['logging']['api_success_log'];
         $this->errorLogFile = $this->config['logging']['api_error_log'];
+        $this->dbLoggingEnabled = $this->config['logging']['database_enabled'] ?? false;
         
         // Ensure log directory exists
         $logDir = dirname($this->successLogFile);
         if (!is_dir($logDir)) {
             mkdir($logDir, 0755, true);
+        }
+
+        // Initialize database logger if enabled
+        if ($this->dbLoggingEnabled) {
+            try {
+                $this->databaseLogger = new DatabaseLogger($config);
+            } catch (\Exception $e) {
+                error_log("LogManager: Failed to initialize DatabaseLogger - " . $e->getMessage());
+                $this->databaseLogger = null;
+            }
         }
     }
 
@@ -48,7 +62,18 @@ class LogManager {
             'files' => implode(',', array_map(fn($f) => basename($f), $files)), // json.txt,encrypted.txt,qr.png
         ];
 
+        // Write to file log
         $this->writeLog($this->successLogFile, $logEntry);
+        
+        // Write to database if enabled (simplified structure)
+        if ($this->databaseLogger) {
+            $dbLogEntry = [
+                'timestamp' => $logEntry['timestamp'],
+                'irn' => $irn,
+                'status' => 'SUCCESS',
+            ];
+            $this->databaseLogger->logSuccess($dbLogEntry);
+        }
     }
 
     /**
@@ -85,9 +110,24 @@ class LogManager {
             'currency' => $requestPayload['document_currency_code'] ?? 'NGN',
             'http_code' => $httpCode,
             'error' => $this->truncate($fullErrorMsg, 500), // Limit error message to 500 chars
+            'context' => '',
         ];
 
+        // Write to file log
         $this->writeLog($this->errorLogFile, $logEntry);
+        
+        // Write to database if enabled (simplified structure)
+        if ($this->databaseLogger) {
+            $dbLogEntry = [
+                'timestamp' => $logEntry['timestamp'],
+                'irn' => $irn,
+                'http_code' => $httpCode,
+                'error_type' => $errorType ?? 'unknown',
+                'error' => $errorMessage,
+                'error_details' => $errorDetails ? json_encode($errorDetails) : null,
+            ];
+            $this->databaseLogger->logError($dbLogEntry);
+        }
     }
 
     /**
@@ -111,12 +151,36 @@ class LogManager {
             'type' => 'EXCEPTION',
             'error_type' => 'exception',
             'irn' => $irn,
+            'business_id' => 'N/A',
+            'supplier' => 'N/A',
+            'customer' => 'N/A',
+            'amount' => 0,
+            'currency' => 'NGN',
             'context' => $context,
             'http_code' => $exception->getCode() ?: 500,
             'error' => $this->truncate($exceptionInfo, 500),
         ];
 
+        // Write to file log
         $this->writeLog($this->errorLogFile, $logEntry);
+        
+        // Write to database if enabled (simplified structure)
+        if ($this->databaseLogger) {
+            $dbLogEntry = [
+                'timestamp' => $logEntry['timestamp'],
+                'irn' => $irn,
+                'http_code' => $exception->getCode() ?: 500,
+                'error_type' => 'exception',
+                'error' => $exception->getMessage(),
+                'error_details' => json_encode([
+                    'file' => $exception->getFile(),
+                    'line' => $exception->getLine(),
+                    'context' => $context,
+                    'additional' => $additionalContext,
+                ]),
+            ];
+            $this->databaseLogger->logError($dbLogEntry);
+        }
     }
 
     /**

@@ -91,6 +91,19 @@ return [
         'hsn_codes' => __DIR__ . '/storage/hsn_codes.json',
         'invoice_index' => __DIR__ . '/storage/invoice_index.json',
     ],
+    'database' => [
+        'logging_enabled' => env('DB_LOGGING_ENABLED', 'false') === 'true',
+        'driver' => env('DB_DRIVER', 'pdo'), // 'pdo' or 'sqlsrv'
+        'host' => env('DB_HOST', 'localhost'),
+        'port' => (int) env('DB_PORT', 1433),
+        'database' => env('DB_DATABASE', 'firststaging'),
+        'username' => env('DB_USERNAME', 'sa'),
+        'password' => env('DB_PASSWORD', ''),
+        'tables' => [
+            'success_logs' => env('DB_TABLE_SUCCESS', 'firs_success_logs'),
+            'error_logs' => env('DB_TABLE_ERROR', 'firs_error_logs'),
+        ],
+    ],
     'logging' => [
         'level' => env('LOG_LEVEL', 'info'),
         'file' => __DIR__ . '/logs/app.log',
@@ -99,6 +112,7 @@ return [
         'processing_log' => __DIR__ . '/logs/processing.log',
         'api_success_log' => __DIR__ . '/logs/api_success.log',
         'api_error_log' => __DIR__ . '/logs/api_error.log',
+        'database_enabled' => env('DB_LOGGING_ENABLED', 'false') === 'true',
     ],
     'qr' => [
         'size' => 300,
