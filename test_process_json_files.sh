@@ -23,8 +23,8 @@ NC='\033[0m'
 JSON_DIR="${JSON_DIR:-C:/www/wwwroot/sftp/user_data}"
 OUTPUT_BASE="${OUTPUT_BASE:-C:/www/wwwroot/sftp/user_data}"
 BASE_URL="${BASE_URL:-https://eivc-k6z6d.ondigitalocean.app}"  # FIRS production API
-X_API_KEY="${X_API_KEY:-62b9fd03-d9ab-4417-a834-be90616253a4}"
-X_API_SECRET="${X_API_SECRET:-c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4'PFrZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC}"
+X_API_KEY="${X_API_KEY:-YOUR-API-KEY-HERE}"
+X_API_SECRET="${X_API_SECRET:-YOUR-API-SECRET-HERE}"
 
 # Workflow: JSON → FIRS validation → Local encrypt (crypto_keys) → Local QR → Save files
 

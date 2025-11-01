@@ -11,8 +11,8 @@
 $JSON_DIR = if ($env:JSON_DIR) { $env:JSON_DIR } else { "C:\www\wwwroot\sftp\user_data" }
 $OUTPUT_BASE = if ($env:OUTPUT_BASE) { $env:OUTPUT_BASE } else { "C:\www\wwwroot\sftp\user_data" }
 $BASE_URL = if ($env:BASE_URL) { $env:BASE_URL } else { "https://eivc-k6z6d.ondigitalocean.app" }
-$X_API_KEY = if ($env:X_API_KEY) { $env:X_API_KEY } else { "62b9fd03-d9ab-4417-a834-be90616253a4" }
-$X_API_SECRET = if ($env:X_API_SECRET) { $env:X_API_SECRET } else { "c72DlrZgxvzl4E2AHjyQqNHMDohqbUZphSPBDDaLJKW4zibksYg6cW5Bsa6g4rZy2vx1xA3r9DGaP27rVamx8wf7OZCAEcKKydkC" }
+$X_API_KEY = if ($env:X_API_KEY) { $env:X_API_KEY } else { "YOUR-API-KEY-HERE" }
+$X_API_SECRET = if ($env:X_API_SECRET) { $env:X_API_SECRET } else { "YOUR-API-SECRET-HERE" }
 
 # Processing mode
 $PROCESS_MODE = if ($env:PROCESS_MODE) { $env:PROCESS_MODE } else { "pipeline" }
