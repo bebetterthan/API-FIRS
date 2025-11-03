@@ -215,21 +215,49 @@ class Router {
                 } catch (\Exception $apiException) {
                     $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
                     
-                    // Log error to api_error.log with detailed information
-                    $logManager->logException(
-                        $irn, 
-                        $apiException, 
-                        'firs_api_submission',
-                        [
-                            'endpoint' => '/api/v1/invoice/sign',
-                            'http_code' => $apiException->getCode(),
-                            'files_created' => [
-                                'json' => basename($jsonFile),
-                                'encrypted' => basename($encryptedFile),
-                                'qr_code' => basename($qrFile),
+                    // Check if it's a FIRSAPIException with original response data
+                    if ($apiException instanceof FIRSAPIException) {
+                        $firsError = $apiException->getFIRSError();
+                        $firsResponseData = $apiException->getResponseData();
+                        
+                        // Log error with ORIGINAL FIRS data
+                        $logManager->logError(
+                            irn: $irn,
+                            httpCode: $apiException->getHttpCode(),
+                            publicMessage: $apiException->getFIRSPublicMessage() ?? 'FIRS API error occurred',
+                            detailedMessage: $apiException->getFIRSDetails() ?? $apiException->getMessage(),
+                            handler: $apiException->getFIRSHandler() ?? 'unknown',
+                            errorDetails: [
+                                'firs_error_id' => $apiException->getFIRSErrorId(),
+                                'firs_response' => $firsResponseData,
+                                'endpoint' => '/api/v1/invoice/sign',
+                                'files_created' => [
+                                    'json' => basename($jsonFile),
+                                    'encrypted' => basename($encryptedFile),
+                                    'qr_code' => basename($qrFile),
+                                ],
                             ],
-                        ]
-                    );
+                            requestPayload: $body,
+                            errorType: 'firs_api_error'
+                        );
+                    } else {
+                        // Regular exception (not from FIRS API)
+                        $logManager->logException(
+                            $irn, 
+                            $apiException, 
+                            'firs_api_submission',
+                            null,
+                            [
+                                'endpoint' => '/api/v1/invoice/sign',
+                                'http_code' => $apiException->getCode(),
+                                'files_created' => [
+                                    'json' => basename($jsonFile),
+                                    'encrypted' => basename($encryptedFile),
+                                    'qr_code' => basename($qrFile),
+                                ],
+                            ]
+                        );
+                    }
                     
                     error_log(sprintf('[FIRS API ERROR] Invoice %s failed: %s', $irn, $apiException->getMessage()));
                     

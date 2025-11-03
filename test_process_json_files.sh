@@ -73,7 +73,7 @@ if [ -f ".env" ]; then
         # Remove leading/trailing whitespace
         key=$(echo "$key" | xargs)
         value=$(echo "$value" | xargs)
-        
+
         case "$key" in
             DB_LOGGING_ENABLED)
                 if [ "$value" = "true" ]; then
@@ -104,11 +104,11 @@ log_to_database() {
     local error_type="$6"
     local error_message="$7"
     local error_details="$8"
-    
+
     if [ "$DB_ENABLED" != "true" ]; then
         return
     fi
-    
+
     # Create temporary PHP script for database logging
     local php_script=$(cat <<'PHPSCRIPT'
 <?php
@@ -131,7 +131,7 @@ try {
     $dsn = "odbc:Driver={SQL Server};Server=$host,$port;Database=$database";
     $pdo = new PDO($dsn, $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
+
     if ($type === 'success') {
         $stmt = $pdo->prepare("INSERT INTO firs_success_logs (timestamp, irn, status) VALUES (?, ?, ?)");
         $stmt->execute([$timestamp, $irn, $status]);
@@ -152,7 +152,7 @@ try {
 }
 PHPSCRIPT
 )
-    
+
     # Export environment variables and run PHP script
     export DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD
     echo "$php_script" | php -- "$log_type" "$timestamp" "$irn" "$status" "$http_code" "$error_type" "$error_message" "$error_details" 2>/dev/null
@@ -197,7 +197,7 @@ log_success() {
 EOF
 )
     echo "$log_entry" >> "$SUCCESS_LOG"
-    
+
     # Log to database
     log_to_database "success" "$timestamp" "$irn" "SUCCESS" "" "" "" ""
 }
@@ -223,7 +223,7 @@ log_error() {
 EOF
 )
     echo "$log_entry" >> "$ERROR_LOG"
-    
+
     # Log to database
     log_to_database "error" "$timestamp" "$irn" "" "$http_code" "$error_type" "$error_message" "$error_details"
 }
@@ -659,7 +659,7 @@ echo base64_encode(\$encrypted);
     # File paths: Base64 and QR without timestamp (will replace if exists)
     BASE64_PATH="${BASE64_DIR}/${IRN}.txt"
     QR_PATH="${QR_DIR}/${IRN}.png"
-    
+
     # Check if files already exist
     if [ -f "$BASE64_PATH" ] || [ -f "$QR_PATH" ]; then
         echo -e "    ${YELLOW}⚠ Files with IRN ${IRN} already exist${NC}"

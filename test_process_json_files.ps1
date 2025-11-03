@@ -99,21 +99,25 @@ function Write-DatabaseLog {
         [string]$HTTPCode = "",
         [string]$ErrorType = "",
         [string]$ErrorMessage = "",
-        [string]$ErrorDetails = ""
+        [string]$ErrorDetails = "",
+        [string]$SourceFile = "",
+        [string]$Handler = "",
+        [string]$DetailedMessage = "",
+        [string]$PublicMessage = ""
     )
-    
+
     if (-not $DB_CONFIG.enabled) {
         return
     }
-    
+
     try {
         # Build connection string for ODBC
         $connectionString = "Driver={SQL Server};Server=$($DB_CONFIG.host),$($DB_CONFIG.port);Database=$($DB_CONFIG.database);Uid=$($DB_CONFIG.username);Pwd=$($DB_CONFIG.password);"
-        
+
         # Create connection
         $connection = New-Object System.Data.Odbc.OdbcConnection($connectionString)
         $connection.Open()
-        
+
         if ($Type -eq "success") {
             # Insert success log
             $query = "INSERT INTO firs_success_logs (timestamp, irn, status) VALUES (?, ?, ?)"
@@ -124,18 +128,21 @@ function Write-DatabaseLog {
             $command.ExecuteNonQuery() | Out-Null
         }
         elseif ($Type -eq "error") {
-            # Insert error log
-            $query = "INSERT INTO firs_error_logs (timestamp, irn, http_code, error_type, error_message, error_details) VALUES (?, ?, ?, ?, ?, ?)"
+            # Insert error log with observability fields
+            $query = "INSERT INTO firs_error_logs (timestamp, irn, source_file, http_code, error_type, handler, detailed_message, public_message, error_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             $command = New-Object System.Data.Odbc.OdbcCommand($query, $connection)
             $command.Parameters.Add("@timestamp", [System.Data.Odbc.OdbcType]::DateTime).Value = [DateTime]::ParseExact($Timestamp, "yyyy-MM-dd HH:mm:ss", $null)
             $command.Parameters.Add("@irn", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($IRN) { $IRN } else { [DBNull]::Value }
+            $command.Parameters.Add("@source_file", [System.Data.Odbc.OdbcType]::VarChar, 500).Value = if ($SourceFile) { $SourceFile } else { [DBNull]::Value }
             $command.Parameters.Add("@http_code", [System.Data.Odbc.OdbcType]::Int).Value = if ($HTTPCode) { [int]$HTTPCode } else { [DBNull]::Value }
             $command.Parameters.Add("@error_type", [System.Data.Odbc.OdbcType]::VarChar, 100).Value = if ($ErrorType) { $ErrorType } else { [DBNull]::Value }
-            $command.Parameters.Add("@error_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($ErrorMessage) { $ErrorMessage } else { [DBNull]::Value }
+            $command.Parameters.Add("@handler", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($Handler) { $Handler } else { [DBNull]::Value }
+            $command.Parameters.Add("@detailed_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($DetailedMessage) { $DetailedMessage } else { [DBNull]::Value }
+            $command.Parameters.Add("@public_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($PublicMessage) { $PublicMessage } else { [DBNull]::Value }
             $command.Parameters.Add("@error_details", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($ErrorDetails) { $ErrorDetails } else { [DBNull]::Value }
             $command.ExecuteNonQuery() | Out-Null
         }
-        
+
         $connection.Close()
     }
     catch {
@@ -207,7 +214,7 @@ function Write-SuccessLog {
     } | ConvertTo-Json -Compress -Depth 10
 
     Add-Content -Path $SUCCESS_LOG -Value $logEntry
-    
+
     # Log to database (simplified structure)
     Write-DatabaseLog -Type "success" -Timestamp $timestamp -IRN $IRN -Status "SUCCESS"
 }
@@ -221,7 +228,10 @@ function Write-ErrorLog {
         [string]$ErrorType = "api_error",
         [string]$Supplier = "N/A",
         [string]$Customer = "N/A",
-        [string]$TotalAmount = "N/A"
+        [string]$TotalAmount = "N/A",
+        [string]$SourceFile = "",
+        [string]$Handler = "",
+        [string]$PublicMessage = ""
     )
 
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -239,8 +249,11 @@ function Write-ErrorLog {
         type = "ERROR"
         error_type = $ErrorType
         irn = $IRN
+        source_file = $SourceFile
         http_code = $HTTPCode
+        handler = $Handler
         error_message = $ErrorMessage
+        public_message = $PublicMessage
         error_details = $ErrorDetails
         request_summary = @{
             supplier = $Supplier
@@ -250,9 +263,9 @@ function Write-ErrorLog {
     } | ConvertTo-Json -Compress -Depth 10
 
     Add-Content -Path $ERROR_LOG -Value $logEntry
-    
-    # Log to database (simplified structure)
-    Write-DatabaseLog -Type "error" -Timestamp $timestamp -IRN $IRN -HTTPCode $HTTPCode -ErrorType $ErrorType -ErrorMessage $ErrorMessage -ErrorDetails $ErrorDetails
+
+    # Log to database with observability fields
+    Write-DatabaseLog -Type "error" -Timestamp $timestamp -IRN $IRN -HTTPCode $HTTPCode -ErrorType $ErrorType -ErrorMessage $ErrorMessage -ErrorDetails $ErrorDetails -SourceFile $SourceFile -Handler $Handler -DetailedMessage $ErrorMessage -PublicMessage $PublicMessage
 }
 
 ################################################################################
@@ -460,7 +473,7 @@ foreach ($jsonFileItem in $jsonFiles) {
             Write-Host "  [!] Duplicate IRN (already validated by FIRS)" -ForegroundColor Yellow
 
             # Log as error (duplicate)
-            Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage "Duplicate IRN - already exists" -ErrorDetails $ERROR_DETAILS -ErrorType "duplicate" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
+            Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage "Duplicate IRN - already exists" -ErrorDetails $ERROR_DETAILS -ErrorType "duplicate" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -SourceFile $FILENAME
 
             # Check if files already exist
             $BASE64_DIR = Join-Path $OUTPUT_BASE "QR\QR_txt"
@@ -498,7 +511,7 @@ foreach ($jsonFileItem in $jsonFiles) {
             Write-Host "  Error: $ERROR_MESSAGE" -ForegroundColor Red
 
             # Log error
-            Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage $ERROR_MESSAGE -ErrorDetails "API call failed" -ErrorType "api_error" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
+            Write-ErrorLog -IRN $IRN -HTTPCode $HTTP_CODE -ErrorMessage $ERROR_MESSAGE -ErrorDetails "API call failed" -ErrorType "api_error" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -SourceFile $FILENAME
 
             $ERRORS++
             Write-Host ""
@@ -693,7 +706,7 @@ try {
         Write-Host "Pipeline completed with missing files ($FILES_CREATED/3)" -ForegroundColor Yellow
 
         # Log error for incomplete processing
-        Write-ErrorLog -IRN $IRN -HTTPCode "0" -ErrorMessage "Incomplete file generation" -ErrorDetails "Only $FILES_CREATED/3 files created" -ErrorType "processing_error" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL
+        Write-ErrorLog -IRN $IRN -HTTPCode "0" -ErrorMessage "Incomplete file generation" -ErrorDetails "Only $FILES_CREATED/3 files created" -ErrorType "processing_error" -Supplier $SUPPLIER -Customer $CUSTOMER -TotalAmount $TOTAL -SourceFile $FILENAME
 
         $ERRORS++
     }

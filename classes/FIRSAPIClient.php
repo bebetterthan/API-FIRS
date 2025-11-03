@@ -128,7 +128,13 @@ class FIRSAPIClient {
         $responseData = json_decode($response, true);
 
         if ($httpCode >= 400) {
-            throw new \Exception('FIRS API error: ' . ($responseData['message'] ?? 'Unknown error') . ' (HTTP ' . $httpCode . ')');
+            // Create custom exception with FIRS response data
+            $exception = new FIRSAPIException(
+                'FIRS API error: ' . ($responseData['message'] ?? 'Unknown error') . ' (HTTP ' . $httpCode . ')'
+            );
+            $exception->setHttpCode($httpCode);
+            $exception->setResponseData($responseData);
+            throw $exception;
         }
 
         return [

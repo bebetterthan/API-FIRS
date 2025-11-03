@@ -18,7 +18,7 @@ class LogManager {
         $this->successLogFile = $this->config['logging']['api_success_log'];
         $this->errorLogFile = $this->config['logging']['api_error_log'];
         $this->dbLoggingEnabled = $this->config['logging']['database_enabled'] ?? false;
-        
+
         // Ensure log directory exists
         $logDir = dirname($this->successLogFile);
         if (!is_dir($logDir)) {
@@ -38,7 +38,7 @@ class LogManager {
 
     /**
      * Log successful API response (optimized for MS SQL Server storage)
-     * 
+     *
      * @param string $irn Original IRN
      * @param string $signedIRN Signed IRN with timestamp
      * @param array $files Files created (json, encrypted, qr_code)
@@ -64,7 +64,7 @@ class LogManager {
 
         // Write to file log
         $this->writeLog($this->successLogFile, $logEntry);
-        
+
         // Write to database if enabled (simplified structure)
         if ($this->databaseLogger) {
             $dbLogEntry = [
@@ -77,107 +77,153 @@ class LogManager {
     }
 
     /**
-     * Log error from API response (optimized for MS SQL Server storage)
-     * 
+     * Log error from API response (enhanced with observability fields)
+     *
      * @param string $irn Original IRN
      * @param int $httpCode HTTP status code
-     * @param string $errorMessage Error message
+     * @param string $publicMessage User-facing error message (safe for client display)
+     * @param string|null $detailedMessage Technical error message (for internal debugging)
+     * @param string|null $handler Context/location where error occurred (e.g., class::method)
      * @param array|null $errorDetails Additional error details
      * @param array|null $requestPayload Original request payload (optional)
      * @param string|null $errorType Type of error (validation, api, processing, etc)
+     * @param string|null $sourceFile Original source JSON filename
      * @return void
      */
-    public function logError(string $irn, int $httpCode, string $errorMessage, ?array $errorDetails = null, ?array $requestPayload = null, ?string $errorType = null): void {
-        // Compact error details - combine error_message and error_details
-        $fullErrorMsg = $errorMessage;
-        if ($errorDetails) {
-            if (is_array($errorDetails)) {
-                $fullErrorMsg .= ' | ' . json_encode($errorDetails, JSON_UNESCAPED_SLASHES);
-            } else {
-                $fullErrorMsg .= ' | ' . $errorDetails;
-            }
-        }
-
+    public function logError(
+        string $irn,
+        int $httpCode,
+        string $publicMessage,
+        ?string $detailedMessage = null,
+        ?string $handler = null,
+        ?array $errorDetails = null,
+        ?array $requestPayload = null,
+        ?string $errorType = null,
+        ?string $sourceFile = null
+    ): void {
+        $timestamp = date('Y-m-d H:i:s');
+        
+        // Enhanced log entry with observability fields
         $logEntry = [
-            'timestamp' => date('Y-m-d H:i:s'),
+            'timestamp' => $timestamp,
             'type' => 'ERROR',
             'error_type' => $errorType ?? 'unknown',
+            'http_code' => $httpCode,
             'irn' => $irn,
+            'source_file' => $sourceFile ?? 'N/A',
+            
+            // --- NEW: Enhanced Observability Fields ---
+            'handler' => $handler ?? 'unknown',
+            'detailed_message' => $this->truncate($detailedMessage ?? $publicMessage, 1000),
+            'public_message' => $this->truncate($publicMessage, 500),
+            
+            // --- Request Context ---
             'business_id' => $requestPayload['business_id'] ?? 'N/A',
             'supplier' => $this->truncate($requestPayload['accounting_supplier_party']['party_name'] ?? 'N/A', 100),
             'customer' => $this->truncate($requestPayload['accounting_customer_party']['party_name'] ?? 'N/A', 100),
             'amount' => $requestPayload['legal_monetary_total']['payable_amount'] ?? 0,
             'currency' => $requestPayload['document_currency_code'] ?? 'NGN',
-            'http_code' => $httpCode,
-            'error' => $this->truncate($fullErrorMsg, 500), // Limit error message to 500 chars
-            'context' => '',
-        ];
-
-        // Write to file log
+        ];        // Write to file log
         $this->writeLog($this->errorLogFile, $logEntry);
-        
-        // Write to database if enabled (simplified structure)
+
+        // Write to database if enabled (with enhanced fields)
         if ($this->databaseLogger) {
             $dbLogEntry = [
-                'timestamp' => $logEntry['timestamp'],
+                'timestamp' => $timestamp,
                 'irn' => $irn,
+                'source_file' => $sourceFile,
                 'http_code' => $httpCode,
                 'error_type' => $errorType ?? 'unknown',
-                'error' => $errorMessage,
-                'error_details' => $errorDetails ? json_encode($errorDetails) : null,
+                'handler' => $handler,
+                'detailed_message' => $detailedMessage,
+                'public_message' => $publicMessage,
+                'error_details' => $errorDetails ? json_encode($errorDetails, JSON_UNESCAPED_SLASHES) : null,
             ];
             $this->databaseLogger->logError($dbLogEntry);
         }
     }
 
     /**
-     * Log exception during processing (optimized for MS SQL Server storage)
-     * 
+     * Log exception during processing (enhanced with observability fields)
+     *
      * @param string $irn Original IRN
      * @param \Exception $exception Exception object
-     * @param string $context Context where error occurred
+     * @param string $handler Context/handler where error occurred (e.g., class::method)
+     * @param string|null $publicMessage User-facing error message (if null, generates generic message)
      * @param array|null $additionalContext Additional context data
+     * @param string|null $sourceFile Original source JSON filename
      * @return void
      */
-    public function logException(string $irn, \Exception $exception, string $context = 'processing', ?array $additionalContext = null): void {
-        // Compact exception info - combine file:line with message
-        $exceptionInfo = basename($exception->getFile()) . ':' . $exception->getLine() . ' - ' . $exception->getMessage();
+    public function logException(
+        string $irn,
+        \Exception $exception,
+        string $handler = 'unknown',
+        ?string $publicMessage = null,
+        ?array $additionalContext = null,
+        ?string $sourceFile = null
+    ): void {
+        $timestamp = date('Y-m-d H:i:s');
+
+        // Build detailed technical message with full stack trace context
+        $detailedMessage = sprintf(
+            "Exception: %s in %s:%d | Message: %s",
+            get_class($exception),
+            $exception->getFile(),
+            $exception->getLine(),
+            $exception->getMessage()
+        );
+
         if ($additionalContext) {
-            $exceptionInfo .= ' | ' . json_encode($additionalContext, JSON_UNESCAPED_SLASHES);
+            $detailedMessage .= ' | Context: ' . json_encode($additionalContext, JSON_UNESCAPED_SLASHES);
+        }
+
+        // Generate safe public message if not provided
+        if (!$publicMessage) {
+            $publicMessage = 'Terjadi kesalahan internal. Silakan coba lagi atau hubungi administrator.';
         }
 
         $logEntry = [
-            'timestamp' => date('Y-m-d H:i:s'),
+            'timestamp' => $timestamp,
             'type' => 'EXCEPTION',
             'error_type' => 'exception',
+            'http_code' => $exception->getCode() ?: 500,
             'irn' => $irn,
+            'source_file' => $sourceFile ?? 'N/A',
+
+            // --- Enhanced Observability Fields ---
+            'handler' => $handler,
+            'detailed_message' => $this->truncate($detailedMessage, 1000),
+            'public_message' => $this->truncate($publicMessage, 500),
+
+            // --- Request Context (minimal for exceptions) ---
             'business_id' => 'N/A',
             'supplier' => 'N/A',
             'customer' => 'N/A',
             'amount' => 0,
             'currency' => 'NGN',
-            'context' => $context,
-            'http_code' => $exception->getCode() ?: 500,
-            'error' => $this->truncate($exceptionInfo, 500),
         ];
 
         // Write to file log
         $this->writeLog($this->errorLogFile, $logEntry);
-        
-        // Write to database if enabled (simplified structure)
+
+        // Write to database if enabled (with enhanced fields)
         if ($this->databaseLogger) {
             $dbLogEntry = [
-                'timestamp' => $logEntry['timestamp'],
+                'timestamp' => $timestamp,
                 'irn' => $irn,
+                'source_file' => $sourceFile,
                 'http_code' => $exception->getCode() ?: 500,
                 'error_type' => 'exception',
-                'error' => $exception->getMessage(),
+                'handler' => $handler,
+                'detailed_message' => $detailedMessage,
+                'public_message' => $publicMessage,
                 'error_details' => json_encode([
+                    'exception_class' => get_class($exception),
                     'file' => $exception->getFile(),
                     'line' => $exception->getLine(),
-                    'context' => $context,
+                    'trace' => $exception->getTraceAsString(),
                     'additional' => $additionalContext,
-                ]),
+                ], JSON_UNESCAPED_SLASHES),
             ];
             $this->databaseLogger->logError($dbLogEntry);
         }
@@ -185,7 +231,7 @@ class LogManager {
 
     /**
      * Truncate string to specified length with ellipsis
-     * 
+     *
      * @param string $str String to truncate
      * @param int $length Maximum length
      * @return string Truncated string
@@ -199,7 +245,7 @@ class LogManager {
 
     /**
      * Write log entry to file
-     * 
+     *
      * @param string $logFile Path to log file
      * @param array $logEntry Log entry data
      * @return void
@@ -211,14 +257,14 @@ class LogManager {
 
     /**
      * Get recent log entries
-     * 
+     *
      * @param string $type 'success' or 'error'
      * @param int $limit Number of entries to retrieve
      * @return array Array of log entries
      */
     public function getRecentLogs(string $type = 'success', int $limit = 100): array {
         $logFile = $type === 'success' ? $this->successLogFile : $this->errorLogFile;
-        
+
         if (!file_exists($logFile)) {
             return [];
         }
@@ -241,7 +287,7 @@ class LogManager {
 
     /**
      * Get log statistics
-     * 
+     *
      * @param string|null $date Date in Y-m-d format (default: today)
      * @return array Statistics for success and error logs
      */

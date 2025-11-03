@@ -15,14 +15,14 @@ class DatabaseLogger {
     public function __construct($config) {
         $this->config = $config;
         $this->enabled = $config['database']['logging_enabled'] ?? false;
-        
+
         if (!$this->enabled) {
             return;
         }
 
         $this->successTable = $config['database']['tables']['success_logs'];
         $this->errorTable = $config['database']['tables']['error_logs'];
-        
+
         try {
             $this->connect();
         } catch (\Exception $e) {
@@ -33,7 +33,7 @@ class DatabaseLogger {
 
     /**
      * Establish connection to MS SQL Server
-     * 
+     *
      * @throws \Exception if connection fails
      */
     private function connect(): void {
@@ -80,7 +80,7 @@ class DatabaseLogger {
 
     /**
      * Log successful API response to database
-     * 
+     *
      * @param array $logData Log entry data
      * @return bool Success status
      */
@@ -108,8 +108,8 @@ class DatabaseLogger {
     }
 
     /**
-     * Log error to database
-     * 
+     * Log error to database (enhanced with observability fields)
+     *
      * @param array $logData Log entry data
      * @return bool Success status
      */
@@ -120,15 +120,18 @@ class DatabaseLogger {
 
         try {
             $sql = "INSERT INTO {$this->errorTable} (
-                timestamp, irn, http_code, error_type, error_message, error_details, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, GETDATE())";
+                timestamp, irn, source_file, http_code, error_type, handler, detailed_message, public_message, error_details, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())";
 
             $params = [
                 $logData['timestamp'] ?? date('Y-m-d H:i:s'),
                 $logData['irn'] ?? '',
+                $logData['source_file'] ?? null,
                 $logData['http_code'] ?? 500,
                 $logData['error_type'] ?? 'unknown',
-                $logData['error'] ?? '',
+                $logData['handler'] ?? 'unknown',
+                $logData['detailed_message'] ?? null,
+                $logData['public_message'] ?? null,
                 $logData['error_details'] ?? null,
             ];
 
@@ -141,7 +144,7 @@ class DatabaseLogger {
 
     /**
      * Execute SQL query with parameters
-     * 
+     *
      * @param string $sql SQL query
      * @param array $params Query parameters
      * @return bool Success status
@@ -171,7 +174,7 @@ class DatabaseLogger {
 
     /**
      * Get recent logs from database
-     * 
+     *
      * @param string $type 'success' or 'error'
      * @param int $limit Number of entries to retrieve
      * @return array Array of log entries
@@ -186,13 +189,13 @@ class DatabaseLogger {
 
         try {
             $sql = "SELECT TOP {$limit} * FROM {$table} ORDER BY created_at DESC";
-            
+
             if ($driver === 'sqlsrv') {
                 $stmt = sqlsrv_query($this->connection, $sql);
                 if ($stmt === false) {
                     return [];
                 }
-                
+
                 $results = [];
                 while ($row = sqlsrv_fetch_array($stmt, SQLSRV_FETCH_ASSOC)) {
                     $results[] = $row;
@@ -212,7 +215,7 @@ class DatabaseLogger {
 
     /**
      * Get log statistics from database
-     * 
+     *
      * @param string|null $date Date in Y-m-d format (default: today)
      * @return array Statistics for success and error logs
      */
@@ -240,13 +243,13 @@ class DatabaseLogger {
 
         try {
             // Count success logs
-            $sql = "SELECT COUNT(*) as count FROM {$this->successTable} 
+            $sql = "SELECT COUNT(*) as count FROM {$this->successTable}
                     WHERE CONVERT(date, timestamp) = ?";
             $count = $this->queryCount($sql, [$date], $driver);
             $stats['success_count'] = $count;
 
             // Count error logs
-            $sql = "SELECT COUNT(*) as count FROM {$this->errorTable} 
+            $sql = "SELECT COUNT(*) as count FROM {$this->errorTable}
                     WHERE CONVERT(date, timestamp) = ?";
             $count = $this->queryCount($sql, [$date], $driver);
             $stats['error_count'] = $count;
@@ -262,7 +265,7 @@ class DatabaseLogger {
 
     /**
      * Execute count query
-     * 
+     *
      * @param string $sql SQL query
      * @param array $params Query parameters
      * @param string $driver Database driver
@@ -288,7 +291,7 @@ class DatabaseLogger {
 
     /**
      * Test database connection
-     * 
+     *
      * @return bool Connection status
      */
     public function testConnection(): bool {
@@ -298,7 +301,7 @@ class DatabaseLogger {
 
         try {
             $driver = $this->config['database']['driver'];
-            
+
             if ($driver === 'sqlsrv') {
                 $sql = "SELECT 1 as test";
                 $stmt = sqlsrv_query($this->connection, $sql);

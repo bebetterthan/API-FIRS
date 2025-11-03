@@ -37,14 +37,16 @@ GO
 
 -- ================================================================
 -- Table: firs_error_logs
--- Description: Stores error responses and exceptions (essential fields only)
+-- Description: Stores error responses and exceptions (enhanced with observability fields)
 -- Columns:
 --   - id: Auto-increment primary key
 --   - timestamp: Log timestamp from application
 --   - irn: Invoice Reference Number (nullable)
 --   - http_code: HTTP status code (nullable)
 --   - error_type: Error category (nullable, e.g., 'api_error', 'validation_error')
---   - error_message: Brief error message (nullable)
+--   - handler: Context/location where error occurred (e.g., 'ClassName::methodName')
+--   - detailed_message: Technical error message with full details (for internal debugging)
+--   - public_message: User-facing error message (safe for client display)
 --   - error_details: Additional context in JSON format (nullable)
 --   - created_at: Record creation timestamp
 -- ================================================================
@@ -56,14 +58,19 @@ CREATE TABLE dbo.firs_error_logs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     timestamp DATETIME2 NOT NULL,
     irn VARCHAR(255) NULL,
+    source_file VARCHAR(500) NULL,
     http_code INT NULL,
     error_type VARCHAR(100) NULL,
-    error_message NVARCHAR(MAX) NULL,
+    handler VARCHAR(255) NULL,
+    detailed_message NVARCHAR(MAX) NULL,
+    public_message NVARCHAR(1000) NULL,
     error_details NVARCHAR(MAX) NULL,
     created_at DATETIME2 DEFAULT GETDATE(),
     INDEX IX_error_timestamp (timestamp),
     INDEX IX_error_irn (irn),
+    INDEX IX_error_source_file (source_file),
     INDEX IX_error_type (error_type),
+    INDEX IX_error_handler (handler),
     INDEX IX_error_http_code (http_code),
     INDEX IX_error_created_at (created_at)
 );
@@ -74,7 +81,7 @@ GO
 -- ================================================================
 
 -- Verify tables were created
-SELECT 
+SELECT
     TABLE_NAME,
     (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = t.TABLE_NAME) as column_count,
     (SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.' + t.TABLE_NAME) AND index_id > 0) as index_count
@@ -83,7 +90,7 @@ WHERE TABLE_NAME IN ('firs_success_logs', 'firs_error_logs')
 ORDER BY TABLE_NAME;
 
 -- View table structure
--- SELECT 
+-- SELECT
 --     TABLE_NAME,
 --     COLUMN_NAME,
 --     DATA_TYPE,
@@ -99,7 +106,7 @@ ORDER BY TABLE_NAME;
 -- ================================================================
 
 -- Recent success logs (Last 10)
--- SELECT TOP 10 
+-- SELECT TOP 10
 --     id,
 --     timestamp,
 --     irn,
@@ -109,7 +116,7 @@ ORDER BY TABLE_NAME;
 -- ORDER BY created_at DESC;
 
 -- Recent error logs (Last 10)
--- SELECT TOP 10 
+-- SELECT TOP 10
 --     id,
 --     timestamp,
 --     irn,
@@ -121,7 +128,7 @@ ORDER BY TABLE_NAME;
 -- ORDER BY created_at DESC;
 
 -- Daily log summary (Last 7 days)
--- SELECT 
+-- SELECT
 --     CAST(timestamp AS DATE) as log_date,
 --     COUNT(*) as success_count,
 --     COUNT(DISTINCT irn) as unique_invoices
@@ -131,7 +138,7 @@ ORDER BY TABLE_NAME;
 -- ORDER BY log_date DESC;
 
 -- Error statistics by type (Last 7 days)
--- SELECT 
+-- SELECT
 --     error_type,
 --     COUNT(*) as error_count,
 --     COUNT(DISTINCT irn) as affected_invoices,
