@@ -54,6 +54,13 @@ class FIRSAPIException extends \Exception {
     }
 
     /**
+     * Get FIRS message (original from FIRS API)
+     */
+    public function getFIRSMessage(): ?string {
+        return $this->responseData['error']['message'] ?? null;
+    }
+
+    /**
      * Get FIRS public message (original from FIRS)
      */
     public function getFIRSPublicMessage(): ?string {

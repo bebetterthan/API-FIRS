@@ -42,13 +42,14 @@ GO
 --   - id: Auto-increment primary key
 --   - timestamp: Log timestamp from application
 --   - irn: Invoice Reference Number (nullable)
+--   - filename: Source JSON filename (nullable)
 --   - http_code: HTTP status code (nullable)
 --   - error_type: Error category (nullable, e.g., 'api_error', 'validation_error')
+--   - message: Original message from FIRS API (nullable)
 --   - handler: Context/location where error occurred (e.g., 'ClassName::methodName')
 --   - detailed_message: Technical error message with full details (for internal debugging)
 --   - public_message: User-facing error message (safe for client display)
 --   - error_details: Additional context in JSON format (nullable)
---   - created_at: Record creation timestamp
 -- ================================================================
 IF OBJECT_ID('dbo.firs_error_logs', 'U') IS NOT NULL
     DROP TABLE dbo.firs_error_logs;
@@ -58,16 +59,17 @@ CREATE TABLE dbo.firs_error_logs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     timestamp DATETIME2 NOT NULL,
     irn VARCHAR(255) NULL,
-    nama_file VARCHAR(500) NULL,
+    filename NVARCHAR(500) NULL,
     http_code INT NULL,
     error_type VARCHAR(100) NULL,
+    message NVARCHAR(MAX) NULL,
     handler VARCHAR(255) NULL,
     detailed_message NVARCHAR(MAX) NULL,
     public_message NVARCHAR(1000) NULL,
     error_details NVARCHAR(MAX) NULL,
     INDEX IX_error_timestamp (timestamp),
     INDEX IX_error_irn (irn),
-    INDEX IX_error_nama_file (nama_file),
+    INDEX IX_error_filename (filename),
     INDEX IX_error_type (error_type),
     INDEX IX_error_handler (handler),
     INDEX IX_error_http_code (http_code)

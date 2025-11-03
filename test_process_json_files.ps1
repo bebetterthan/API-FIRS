@@ -129,13 +129,14 @@ function Write-DatabaseLog {
         }
         elseif ($Type -eq "error") {
             # Insert error log with observability fields
-            $query = "INSERT INTO firs_error_logs (timestamp, irn, nama_file, http_code, error_type, handler, detailed_message, public_message, error_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            $query = "INSERT INTO firs_error_logs (timestamp, irn, filename, http_code, error_type, message, handler, detailed_message, public_message, error_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
             $command = New-Object System.Data.Odbc.OdbcCommand($query, $connection)
             $command.Parameters.Add("@timestamp", [System.Data.Odbc.OdbcType]::DateTime).Value = [DateTime]::ParseExact($Timestamp, "yyyy-MM-dd HH:mm:ss", $null)
             $command.Parameters.Add("@irn", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($IRN) { $IRN } else { [DBNull]::Value }
-            $command.Parameters.Add("@nama_file", [System.Data.Odbc.OdbcType]::VarChar, 500).Value = if ($SourceFile) { $SourceFile } else { [DBNull]::Value }
+            $command.Parameters.Add("@filename", [System.Data.Odbc.OdbcType]::VarChar, 500).Value = if ($SourceFile) { $SourceFile } else { [DBNull]::Value }
             $command.Parameters.Add("@http_code", [System.Data.Odbc.OdbcType]::Int).Value = if ($HTTPCode) { [int]$HTTPCode } else { [DBNull]::Value }
             $command.Parameters.Add("@error_type", [System.Data.Odbc.OdbcType]::VarChar, 100).Value = if ($ErrorType) { $ErrorType } else { [DBNull]::Value }
+            $command.Parameters.Add("@message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($ErrorMessage) { $ErrorMessage } else { [DBNull]::Value }
             $command.Parameters.Add("@handler", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($Handler) { $Handler } else { [DBNull]::Value }
             $command.Parameters.Add("@detailed_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($DetailedMessage) { $DetailedMessage } else { [DBNull]::Value }
             $command.Parameters.Add("@public_message", [System.Data.Odbc.OdbcType]::NVarChar).Value = if ($PublicMessage) { $PublicMessage } else { [DBNull]::Value }
@@ -249,10 +250,10 @@ function Write-ErrorLog {
         type = "ERROR"
         error_type = $ErrorType
         irn = $IRN
-        nama_file = $SourceFile
+        filename = $SourceFile
         http_code = $HTTPCode
         handler = $Handler
-        error_message = $ErrorMessage
+        message = $ErrorMessage
         public_message = $PublicMessage
         error_details = $ErrorDetails
         request_summary = @{

@@ -82,6 +82,7 @@ class LogManager {
      * @param string $irn Original IRN
      * @param int $httpCode HTTP status code
      * @param string $publicMessage User-facing error message (safe for client display)
+     * @param string|null $message Original message from FIRS API
      * @param string|null $detailedMessage Technical error message (for internal debugging)
      * @param string|null $handler Context/location where error occurred (e.g., class::method)
      * @param array|null $errorDetails Additional error details
@@ -94,6 +95,7 @@ class LogManager {
         string $irn,
         int $httpCode,
         string $publicMessage,
+        ?string $message = null,
         ?string $detailedMessage = null,
         ?string $handler = null,
         ?array $errorDetails = null,
@@ -110,7 +112,7 @@ class LogManager {
             'error_type' => $errorType ?? 'unknown',
             'http_code' => $httpCode,
             'irn' => $irn,
-            'nama_file' => $sourceFile ?? 'N/A',
+            'filename' => $sourceFile ?? 'N/A',
 
             // --- NEW: Enhanced Observability Fields ---
             'handler' => $handler ?? 'unknown',
@@ -131,9 +133,10 @@ class LogManager {
             $dbLogEntry = [
                 'timestamp' => $timestamp,
                 'irn' => $irn,
-                'nama_file' => $sourceFile,
+                'filename' => $sourceFile,
                 'http_code' => $httpCode,
                 'error_type' => $errorType ?? 'unknown',
+                'message' => $message,
                 'handler' => $handler,
                 'detailed_message' => $detailedMessage,
                 'public_message' => $publicMessage,
@@ -188,7 +191,7 @@ class LogManager {
             'error_type' => 'exception',
             'http_code' => $exception->getCode() ?: 500,
             'irn' => $irn,
-            'nama_file' => $sourceFile ?? 'N/A',
+            'filename' => $sourceFile ?? 'N/A',
 
             // --- Enhanced Observability Fields ---
             'handler' => $handler,
@@ -211,7 +214,7 @@ class LogManager {
             $dbLogEntry = [
                 'timestamp' => $timestamp,
                 'irn' => $irn,
-                'nama_file' => $sourceFile,
+                'filename' => $sourceFile,
                 'http_code' => $exception->getCode() ?: 500,
                 'error_type' => 'exception',
                 'handler' => $handler,

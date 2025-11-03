@@ -225,6 +225,7 @@ class Router {
                             irn: $irn,
                             httpCode: $apiException->getHttpCode(),
                             publicMessage: $apiException->getFIRSPublicMessage() ?? 'FIRS API error occurred',
+                            message: $apiException->getFIRSMessage(),
                             detailedMessage: $apiException->getFIRSDetails() ?? $apiException->getMessage(),
                             handler: $apiException->getFIRSHandler() ?? 'unknown',
                             errorDetails: [
