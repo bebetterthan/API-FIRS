@@ -120,13 +120,13 @@ class DatabaseLogger {
 
         try {
             $sql = "INSERT INTO {$this->errorTable} (
-                timestamp, irn, source_file, http_code, error_type, handler, detailed_message, public_message, error_details, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())";
+                timestamp, irn, nama_file, http_code, error_type, handler, detailed_message, public_message, error_details
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             $params = [
                 $logData['timestamp'] ?? date('Y-m-d H:i:s'),
                 $logData['irn'] ?? '',
-                $logData['source_file'] ?? null,
+                $logData['nama_file'] ?? null,
                 $logData['http_code'] ?? 500,
                 $logData['error_type'] ?? 'unknown',
                 $logData['handler'] ?? 'unknown',

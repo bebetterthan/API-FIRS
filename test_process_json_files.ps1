@@ -129,11 +129,11 @@ function Write-DatabaseLog {
         }
         elseif ($Type -eq "error") {
             # Insert error log with observability fields
-            $query = "INSERT INTO firs_error_logs (timestamp, irn, source_file, http_code, error_type, handler, detailed_message, public_message, error_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            $query = "INSERT INTO firs_error_logs (timestamp, irn, nama_file, http_code, error_type, handler, detailed_message, public_message, error_details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             $command = New-Object System.Data.Odbc.OdbcCommand($query, $connection)
             $command.Parameters.Add("@timestamp", [System.Data.Odbc.OdbcType]::DateTime).Value = [DateTime]::ParseExact($Timestamp, "yyyy-MM-dd HH:mm:ss", $null)
             $command.Parameters.Add("@irn", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($IRN) { $IRN } else { [DBNull]::Value }
-            $command.Parameters.Add("@source_file", [System.Data.Odbc.OdbcType]::VarChar, 500).Value = if ($SourceFile) { $SourceFile } else { [DBNull]::Value }
+            $command.Parameters.Add("@nama_file", [System.Data.Odbc.OdbcType]::VarChar, 500).Value = if ($SourceFile) { $SourceFile } else { [DBNull]::Value }
             $command.Parameters.Add("@http_code", [System.Data.Odbc.OdbcType]::Int).Value = if ($HTTPCode) { [int]$HTTPCode } else { [DBNull]::Value }
             $command.Parameters.Add("@error_type", [System.Data.Odbc.OdbcType]::VarChar, 100).Value = if ($ErrorType) { $ErrorType } else { [DBNull]::Value }
             $command.Parameters.Add("@handler", [System.Data.Odbc.OdbcType]::VarChar, 255).Value = if ($Handler) { $Handler } else { [DBNull]::Value }
@@ -249,7 +249,7 @@ function Write-ErrorLog {
         type = "ERROR"
         error_type = $ErrorType
         irn = $IRN
-        source_file = $SourceFile
+        nama_file = $SourceFile
         http_code = $HTTPCode
         handler = $Handler
         error_message = $ErrorMessage

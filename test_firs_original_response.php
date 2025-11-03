@@ -1,7 +1,7 @@
 <?php
 /**
  * Test FIRS API with Original Response Logging
- * 
+ *
  * Script ini akan mengirim invoice ke FIRS API dan
  * mencatat response ASLI dari FIRS (tanpa translasi)
  */
@@ -101,10 +101,10 @@ echo "Sending to FIRS API...\n\n";
 
 try {
     $response = $firsClient->submitInvoice($invoiceData);
-    
+
     echo "✅ SUCCESS\n";
     echo json_encode($response, JSON_PRETTY_PRINT) . "\n\n";
-    
+
     $logManager->logSuccess(
         irn: $irn,
         signedIRN: $response['data']['signed_irn'] ?? $irn,
@@ -112,14 +112,14 @@ try {
         apiResponse: $response,
         invoiceData: $invoiceData
     );
-    
+
 } catch (FIRSAPIException $e) {
     echo "❌ FIRS API ERROR\n\n";
-    
+
     echo "=== ORIGINAL FIRS RESPONSE ===\n";
     $firsResponse = $e->getResponseData();
     echo json_encode($firsResponse, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n\n";
-    
+
     echo "=== EXTRACTED FIRS FIELDS ===\n";
     echo "IRN: {$irn}\n";
     echo "HTTP Code: " . $e->getHttpCode() . "\n";
@@ -128,7 +128,7 @@ try {
     echo "FIRS Details: " . ($e->getFIRSDetails() ?? 'N/A') . "\n";
     echo "FIRS Error ID: " . ($e->getFIRSErrorId() ?? 'N/A') . "\n";
     echo "Source File: N/A (test script, not from JSON file)\n\n";
-    
+
     // Log dengan data ORIGINAL dari FIRS + source_file
     $logManager->logError(
         irn: $irn,
@@ -145,14 +145,14 @@ try {
         errorType: 'firs_api_error',
         sourceFile: 'test_firs_original_response.php'
     );
-    
+
     echo "✓ Logged to: {$config['logging']['api_error_log']}\n\n";
-    
+
 } catch (\Exception $e) {
     echo "❌ GENERAL ERROR\n";
     echo "Message: " . $e->getMessage() . "\n";
     echo "Code: " . $e->getCode() . "\n\n";
-    
+
     $logManager->logException(
         irn: $irn,
         exception: $e,

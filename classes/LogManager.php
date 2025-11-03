@@ -102,7 +102,7 @@ class LogManager {
         ?string $sourceFile = null
     ): void {
         $timestamp = date('Y-m-d H:i:s');
-        
+
         // Enhanced log entry with observability fields
         $logEntry = [
             'timestamp' => $timestamp,
@@ -110,13 +110,13 @@ class LogManager {
             'error_type' => $errorType ?? 'unknown',
             'http_code' => $httpCode,
             'irn' => $irn,
-            'source_file' => $sourceFile ?? 'N/A',
-            
+            'nama_file' => $sourceFile ?? 'N/A',
+
             // --- NEW: Enhanced Observability Fields ---
             'handler' => $handler ?? 'unknown',
             'detailed_message' => $this->truncate($detailedMessage ?? $publicMessage, 1000),
             'public_message' => $this->truncate($publicMessage, 500),
-            
+
             // --- Request Context ---
             'business_id' => $requestPayload['business_id'] ?? 'N/A',
             'supplier' => $this->truncate($requestPayload['accounting_supplier_party']['party_name'] ?? 'N/A', 100),
@@ -131,7 +131,7 @@ class LogManager {
             $dbLogEntry = [
                 'timestamp' => $timestamp,
                 'irn' => $irn,
-                'source_file' => $sourceFile,
+                'nama_file' => $sourceFile,
                 'http_code' => $httpCode,
                 'error_type' => $errorType ?? 'unknown',
                 'handler' => $handler,
@@ -188,7 +188,7 @@ class LogManager {
             'error_type' => 'exception',
             'http_code' => $exception->getCode() ?: 500,
             'irn' => $irn,
-            'source_file' => $sourceFile ?? 'N/A',
+            'nama_file' => $sourceFile ?? 'N/A',
 
             // --- Enhanced Observability Fields ---
             'handler' => $handler,
@@ -211,7 +211,7 @@ class LogManager {
             $dbLogEntry = [
                 'timestamp' => $timestamp,
                 'irn' => $irn,
-                'source_file' => $sourceFile,
+                'nama_file' => $sourceFile,
                 'http_code' => $exception->getCode() ?: 500,
                 'error_type' => 'exception',
                 'handler' => $handler,

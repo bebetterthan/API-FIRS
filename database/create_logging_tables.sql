@@ -58,21 +58,19 @@ CREATE TABLE dbo.firs_error_logs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     timestamp DATETIME2 NOT NULL,
     irn VARCHAR(255) NULL,
-    source_file VARCHAR(500) NULL,
+    nama_file VARCHAR(500) NULL,
     http_code INT NULL,
     error_type VARCHAR(100) NULL,
     handler VARCHAR(255) NULL,
     detailed_message NVARCHAR(MAX) NULL,
     public_message NVARCHAR(1000) NULL,
     error_details NVARCHAR(MAX) NULL,
-    created_at DATETIME2 DEFAULT GETDATE(),
     INDEX IX_error_timestamp (timestamp),
     INDEX IX_error_irn (irn),
-    INDEX IX_error_source_file (source_file),
+    INDEX IX_error_nama_file (nama_file),
     INDEX IX_error_type (error_type),
     INDEX IX_error_handler (handler),
-    INDEX IX_error_http_code (http_code),
-    INDEX IX_error_created_at (created_at)
+    INDEX IX_error_http_code (http_code)
 );
 GO
 

@@ -191,35 +191,35 @@ class Router {
             if ($this->config['firs_api']['enabled']) {
                 $stepStart = microtime(true);
                 $firsClient = new FIRSAPIClient($this->config);
-                
+
                 try {
                     $firsResponse = $firsClient->submitInvoice($body);
                     $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
-                    
+
                     $totalTime = round((microtime(true) - $startTime) * 1000, 2);
-                    
+
                     // Log success to api_success.log with detailed information
                     $logManager->logSuccess(
-                        $irn, 
-                        $signedIRN, 
+                        $irn,
+                        $signedIRN,
                         [
                             'json' => $jsonFile,
                             'encrypted' => $encryptedFile,
                             'qr_code' => $qrFile,
-                        ], 
+                        ],
                         $firsResponse,
                         $body // Invoice data for details
                     );
-                    
+
                     error_log(sprintf('[FIRS API SUCCESS] Invoice %s submitted successfully', $irn));
                 } catch (\Exception $apiException) {
                     $timings['firs_api'] = round((microtime(true) - $stepStart) * 1000, 2);
-                    
+
                     // Check if it's a FIRSAPIException with original response data
                     if ($apiException instanceof FIRSAPIException) {
                         $firsError = $apiException->getFIRSError();
                         $firsResponseData = $apiException->getResponseData();
-                        
+
                         // Log error with ORIGINAL FIRS data
                         $logManager->logError(
                             irn: $irn,
@@ -243,8 +243,8 @@ class Router {
                     } else {
                         // Regular exception (not from FIRS API)
                         $logManager->logException(
-                            $irn, 
-                            $apiException, 
+                            $irn,
+                            $apiException,
                             'firs_api_submission',
                             null,
                             [
@@ -258,9 +258,9 @@ class Router {
                             ]
                         );
                     }
-                    
+
                     error_log(sprintf('[FIRS API ERROR] Invoice %s failed: %s', $irn, $apiException->getMessage()));
-                    
+
                     // Continue processing even if FIRS API fails
                     $firsResponse = [
                         'status' => 'error',
@@ -271,13 +271,13 @@ class Router {
                 // Log local success (FIRS API disabled)
                 $totalTime = round((microtime(true) - $startTime) * 1000, 2);
                 $logManager->logSuccess(
-                    $irn, 
-                    $signedIRN, 
+                    $irn,
+                    $signedIRN,
                     [
                         'json' => $jsonFile,
                         'encrypted' => $encryptedFile,
                         'qr_code' => $qrFile,
-                    ], 
+                    ],
                     ['status' => 'disabled', 'message' => 'FIRS API integration disabled'],
                     $body
                 );
@@ -307,7 +307,7 @@ class Router {
             // Log processing error
             require_once __DIR__ . '/LogManager.php';
             $logManager = new LogManager($this->config);
-            
+
             // Try to extract IRN from body if available
             $errorIRN = 'unknown';
             try {
@@ -316,7 +316,7 @@ class Router {
             } catch (\Exception $ex) {
                 // Ignore if can't get body
             }
-            
+
             $logManager->logException(
                 $errorIRN,
                 $e,
@@ -326,7 +326,7 @@ class Router {
                     'error_code' => $e->getCode(),
                 ]
             );
-            
+
             $this->responseBuilder->error($e->getMessage(), 'PROCESSING_ERROR', $e->getTrace(), 500);
         }
     }

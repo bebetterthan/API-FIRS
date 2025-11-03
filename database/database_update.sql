@@ -20,20 +20,20 @@ GO
 -- Add new columns for enhanced observability
 -- ================================================================
 
--- Add source_file column (original JSON filename)
+-- Add nama_file column (original JSON filename)
 IF NOT EXISTS (
     SELECT * FROM INFORMATION_SCHEMA.COLUMNS 
-    WHERE TABLE_NAME = 'firs_error_logs' AND COLUMN_NAME = 'source_file'
+    WHERE TABLE_NAME = 'firs_error_logs' AND COLUMN_NAME = 'nama_file'
 )
 BEGIN
     ALTER TABLE dbo.firs_error_logs
-    ADD source_file VARCHAR(500) NULL;
+    ADD nama_file VARCHAR(500) NULL;
     
-    PRINT 'Added column: source_file';
+    PRINT 'Added column: nama_file';
 END
 ELSE
 BEGIN
-    PRINT 'Column source_file already exists, skipping...';
+    PRINT 'Column nama_file already exists, skipping...';
 END
 GO
 
@@ -90,18 +90,18 @@ GO
 -- Add indexes for new columns
 -- ================================================================
 
--- Add index on source_file for filtering by JSON filename
+-- Add index on nama_file for filtering by JSON filename
 IF NOT EXISTS (
     SELECT * FROM sys.indexes 
-    WHERE name = 'IX_error_source_file' AND object_id = OBJECT_ID('dbo.firs_error_logs')
+    WHERE name = 'IX_error_nama_file' AND object_id = OBJECT_ID('dbo.firs_error_logs')
 )
 BEGIN
-    CREATE INDEX IX_error_source_file ON dbo.firs_error_logs(source_file);
-    PRINT 'Created index: IX_error_source_file';
+    CREATE INDEX IX_error_nama_file ON dbo.firs_error_logs(nama_file);
+    PRINT 'Created index: IX_error_nama_file';
 END
 ELSE
 BEGIN
-    PRINT 'Index IX_error_source_file already exists, skipping...';
+    PRINT 'Index IX_error_nama_file already exists, skipping...';
 END
 GO
 
